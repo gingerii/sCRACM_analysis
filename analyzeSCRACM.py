@@ -1,3 +1,25 @@
+"""
+Averaging and plotting sCRACM data 
+
+Functions: 
+Helpers:
+    - load_sCRACMdatabase: loads databse with meta data, includes dates and cell IDs
+    - annotate_layers: gives layer assignments to cells based on cortical depth
+    - sCRACM_cellShifter: shifts sCRACM maps up or down (adds rows/cols) to alignm by soma
+    - sCRACM_cellShifterpia: shifts sCRACM maps up or down (adds rows/cols) to alignm by pia
+    - mapAverage: takes stack of maps and averages into single averaged map
+    - get_cells_to_average: makes list of file locations for cells 
+    - average_map_stack: returns stack of aligned maps, based on input dependent filters
+Execution/plotting functions: 
+    - average_map: plots average maps (soma and pia aligned) based in input dependent filters
+    - page_through_maps: returns interactive plot, allowing user to scroll through all maps 
+    making up a particular average map 
+    - collapse_map: collapses all cells from an input source on the x-axis and plots 
+    heatmaps of each cell, arranged from superfical to deep layer cells 
+    - bead_comparison: plots paired charts showing total integration of bead positive cells 
+    against negative controls per input source, per layer. Returns ttest stats for each layer
+"""
+
 from IPython.core.display import display, HTML
 display(HTML("<style>.container { width:100% !important; }</style>"))
 import numpy as np
@@ -20,7 +42,7 @@ import mstruct2pydict as m2p
 from plotly import graph_objects as go
 analysis_path = '/Users/iangingerich/Dropbox (OHSU)/Ian_Tianyi_shared/Databases/Analyzed_cells/'
 
-# changes made for testing
+# 
 
 def load_sCRACMdatabase():
     """"
