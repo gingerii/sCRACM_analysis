@@ -1,6 +1,56 @@
 import os
 import re
 import numpy as np
+from scipy import io
+
+"""
+for pulling info out of matlab .xsg, .mat, and .m file and reading into python dicts 
+Functions: 
+-helpers: 
+    _check_keys: 
+    -todict: recursive 
+-Execution functions: 
+    - loadmat: loads matlab structures as py dicts, improvement upon scipy.io.loadmat. 
+    adapted from: https://stackoverflow.com/questions/11955000/how-to-preserve-matlab-struct-when-accessing-in-python
+    - mstruct2pydict: Convert a Matlab *.m file __that defines a Matlab struct()__
+        into a Python dict.  Each struct.FIELD corresponds to a dict[KEY]. Contributed by 
+        Mike Muniak (muniak@ohsu.edu)
+
+"""
+
+def _check_keys( dict):
+    """
+    checks if entries in dictionary are mat-objects. If yes
+    todict is called to change them to nested dictionaries
+    """
+    for key in dict:
+        if isinstance(dict[key], io.matlab.mio5_params.mat_struct):
+            dict[key] = _todict(dict[key])
+    return dict
+
+def _todict(matobj):
+    """
+    A recursive function which constructs from matobjects nested dictionaries
+    """
+    dict = {}
+    for strg in matobj._fieldnames:
+        elem = matobj.__dict__[strg]
+        if isinstance(elem, io.matlab.mio5_params.mat_struct):
+            dict[strg] = _todict(elem)
+        else:
+            dict[strg] = elem
+    return dict
+
+def loadmat(filename):
+    """
+    this function should be called instead of direct scipy.io .loadmat
+    as it cures the problem of not properly recovering python dictionaries
+    from mat files. It calls the function check keys to cure all entries
+    which are still mat-objects
+    """
+    data = io.loadmat(filename, struct_as_record=False, squeeze_me=True)
+    return _check_keys(data)
+
 
 def mstruct2pydict(path):
     """ Convert a Matlab *.m file __that defines a Matlab struct()__
