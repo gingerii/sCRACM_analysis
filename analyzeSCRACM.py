@@ -40,6 +40,8 @@ np.set_printoptions(threshold=sys.maxsize)
 sys.path.insert(0, '/Users/iangingerich/Desktop/morph_analysis/') #to direct python to location of interpreter! 
 import mstruct2pydict as m2p 
 from plotly import graph_objects as go
+
+#define path to analysis files. Hard coded for now 
 analysis_path = '/Users/iangingerich/Dropbox (OHSU)/Ian_Tianyi_shared/Databases/Analyzed_cells/'
 
 # 
@@ -55,12 +57,14 @@ def load_sCRACMdatabase():
 def annotate_layers(df):
     """
     Will annotate loaded DataFrame with layer identies of each cell. Layers are based on normalized 
-    soma depth. Database must contain soma depth and cortical thickness information to be annotated. 
+    soma depth. Database must contain soma depth and cortical thickness information to be annotated. Use load_sCRACMdatabase function to load in df.
     """
-    df['ratio_thickness'] = df['piadistance']/df['cortical thickness']
-    labels = ['L2','L3','L5','L6','Claustrum']
-    bins = [0,0.231,0.4080,0.65275,0.848617,1]
-    df['layer_bin']= pd.cut(df['ratio_thickness'],bins=bins,labels = labels)
+    df['ratio_thickness'] = df['piadistance']/df['cortical thickness']  #find the normalized cortical depth of the soma. #soma depth and cortical thickness are defined during data processing 
+    labels = ['L1','L2','L3','L5','L6','Claustrum'] #label. Note, this is for the agranular insula (AI), where L4 is absent 
+    bins = [0,,0.13,0.25,0.43,0.68,0.87,1] #normalized thickness bins are for AI only, based on 3 nissl brain layer annotations. 
+    #note: layer annotations are variable depending on dorsal/ventral axis. For more acurate layer identities, map cells to insular flatmap first, and query thickness based on coordinates! 
+
+    df['layer_bin']= pd.cut(df['ratio_thickness'],bins=bins,labels = labels) #annotate the df using the labels and bins variables 
     
 # Helper functions listed first 
 def  sCRACM_cellShifter(map_n,xy,spacing,trueRowNumber):
@@ -68,17 +72,23 @@ def  sCRACM_cellShifter(map_n,xy,spacing,trueRowNumber):
     Helper function used when averaging multiple sCRACM maps together. used when averaging maps of different 
     sizes. Will shift maps up or down to align individual maps to each other. Used when aligning individual maps
     to the soma of each recording. 
+    inputs: 
+    map_n: single average map from a LSPS or sCRACM experiment 
+    xy: soma coordinates to base shifting on 
+    trueRowNumber: true number of rows the map had when recording the cell 
     """
     
-    [r,c] = np.shape(map_n)
-    newmap = np.zeros([2*r,2*c])
+    [r,c] = np.shape(map_n) #row and columns for the map you are shifting 
+    newmap = np.zeros([2*r,2*c]) # new map size, double the size of the original map
     #go through maps one at a time
     #calculate how many rows and columns to shift by. x for rows, y for columns 
 
-    shiftRows = np.round(xy[1]/spacing)+(r-trueRowNumber)/2
-    shiftCols = -np.round(xy[0]/spacing)
-    #place the original map onto the new map, with shift 
-    newmap[int(1 + np.round(r/2)+shiftRows):int(r+np.round(r/2)+shiftRows+1),int(1+np.round(c/2)+shiftCols):int(c+np.round(c/2)+shiftCols)+1] = map_n
+    shiftRows = np.round(xy[1]/spacing)+(r-trueRowNumber)/2 #calulate the number of rows to shift by, x-coordinate of the soma, divided by the map spacing (usually 50um) added to the difference 
+    # between map row and the true row number divided by 2. 
+    shiftCols = -np.round(xy[0]/spacing) # -y coord divided by the map spacing (50um usually)
+   
+   #place the original map onto the new map, with shift applied  
+    newmap[int(1 + np.round(r/2)+shiftRows):int(r+np.round(r/2)+shiftRows+1),int(1+np.round(c/2)+shiftCols):int(c+np.round(c/2)+shiftCols)+1] = map_n 
     return newmap
 
 # sCRACM cell shifter for pia alignment
@@ -92,7 +102,7 @@ def  sCRACM_cellShifterPia(map_n,xy,spacing,trueRowNumber):
     #go through maps one at a time
     #calculate how man rows and columns to shift by. x for rows, y for columns 
 
-    shiftRows = np.round(xy[1]/spacing)-(trueRowNumber/2)
+    shiftRows = np.round(xy[1]/spacing)-(trueRowNumber/2) #note: this line is the differnce between the above function. The true row number is subraced from the coordinate instead of diff and added.
     shiftCols = -np.round(xy[0]/spacing)
     #place the original map onto the new map, with shift 
     newmap[int(1 + np.round(r/2)+shiftRows):int(r+np.round(r/2)+shiftRows+1),int(1+np.round(c/2)+shiftCols):int(c+np.round(c/2)+shiftCols+1)] = map_n
@@ -104,15 +114,17 @@ def mapAverage(mapStack):
     """
     Helper function called when plotting average sCRACM maps. Will take (x,y,n) array of maps, average by last dim,
     returning single (x,y) array, which represents the average map. 
+    inputs: 
+    mapStack: a stack of maps to average, will be (n,24,12) in size with n being the number of maps you are averaging 
     """
     #mapStack = maps
-    [planes,rows,cols] = np.shape(mapStack)
-    mapAvg = np.zeros([rows,cols])
-    for r in range(0,rows): # maybe at +1
+    [planes,rows,cols] = np.shape(mapStack) #take the dimensions of the stack
+    mapAvg = np.zeros([rows,cols]) #make a new array for the average map
+    for r in range(0,rows): #iterate through the rows and columns of the mapStack, and take the mean at each point, return as mapAvg. 
         for c in range(0,cols):
             mapAvg[r,c] = np.mean(mapStack[:,r,c])
     return mapAvg 
-
+# note: this above function could be imporved. Intead of looping, just use a vectorized approach such as: np.mean(mapStack, axis = 0). Taking the mean of the first axis 
 
 
 
@@ -136,30 +148,25 @@ def get_cells_to_average(input_source, layer,
     sCRACMdf = load_sCRACMdatabase()
     #calculate relative cortical thickenss
     sCRACMdf['ratio_thickness'] = sCRACMdf['piadistance']/sCRACMdf['cortical thickness']
-    #annotate cells based on relative thickness. Note: layer 1 cells not excluded in this code!  
-    labels = ['L2','L3','L5','L6','Claustrum']
-    bins = [0,0.231,0.4080,0.65275,0.848617,1]
-    sCRACMdf['layer_bin']= pd.cut(sCRACMdf['ratio_thickness'],bins=bins,labels = labels)
+    #annotate cells based on relative thickness. Note: see caviates with the layer designations in the documentation for annotate_layers()  
+    annotate_layers(sCRACMdf) 
     
-    # average based on relative cortical depth assignment
-    
-   
-    
+    # average based on relative cortical depth assignment, input source, make sure there is a map to analyze, and the map has responses. 
     if by_layer_bin == True:
         printout = 'by_layer_bin'
         cells_to_average_df = sCRACMdf[(sCRACMdf['InjectionSite']==input_source) & (sCRACMdf['MapForAnalysis']==True) & (sCRACMdf['Response']==True)
                                    &(sCRACMdf['layer_bin']== layer)]# & sCRACMdf['Bead Positive?']== bead_positive] 
-        cell_IDs = analysis_path + cells_to_average_df['CellID'] + '_analysis.m'
+        cell_IDs = analysis_path + cells_to_average_df['CellID'] + '_analysis.m' #append together file names to load 
 
         #Nested IF statments: by layer bin first, and then add additional filters
         # average based on cellular M_type 
-        if by_Mtype != False:
+        if by_Mtype != False: #if by_Mtype is something other than false (default), then filter df my m_type as well. 
             printout = 'by_Mtype: '+str(by_Mtype)
-            cells_to_average_df = cells_to_average_df[(cells_to_average_df['M_type_new']== by_Mtype)] #filter based on mapfor analysis and input source
+            cells_to_average_df = cells_to_average_df[(cells_to_average_df['M_type_final']== by_Mtype)] #filter based on newest M_type assignments 
             cell_IDs = analysis_path + cells_to_average_df['CellID'] + '_analysis.m'
 
 
-      
+      # if you want to get the file names of bead positive cells, bead positve= True during input
 
         elif bead_positive == True:
             printout = 'bead_positive'
@@ -167,14 +174,15 @@ def get_cells_to_average(input_source, layer,
 
             cell_IDs = analysis_path + cells_to_average_df['CellID'] + '_analysis.m'
             
-        elif bead_positive == 'negative_control':
+        elif bead_positive == 'negative_control': #note: right now this only works for cells that have a negative control designated in their .m file. For full python code, the inport settings 
+            # also needs to have a negative control variable to filtering 
             printout = 'negative_control'
             cells_to_average_df = cells_to_average_df[(cells_to_average_df['Injection Type']=='virus+bead')& (cells_to_average_df['Bead Positive?']== False)]
             cell_IDs = analysis_path + cells_to_average_df['CellID'] + '_analysis.m'
             
     
 
-    # average based on online designation of layer 
+    # average based on online designation of layer, not the average layer consensus. This should be the option if using this code to average cells recorded in places outside the AI 
     elif by_layer_online == True:
         printout = 'by_layer_online'
         cells_to_average_df = sCRACMdf[(sCRACMdf['InjectionSite']==input_source) & (sCRACMdf['MapForAnalysis']==True) & (sCRACMdf['Response']==True)
@@ -185,7 +193,7 @@ def get_cells_to_average(input_source, layer,
         # average based on cellular M_type 
         if by_Mtype != False:
             printout = 'by_Mtype: '+str(by_Mtype)
-            cells_to_average_df = cells_to_average_df[(cells_to_average_df['M_type_new']== by_Mtype)] #filter based on mapfor analysis and input source
+            cells_to_average_df = cells_to_average_df[(cells_to_average_df['M_type_final']== by_Mtype)] #filter based on mapfor analysis and input source
             cell_IDs = analysis_path + cells_to_average_df['CellID'] + '_analysis.m'
 
 
@@ -230,6 +238,7 @@ def average_map_stack(input_source, layer,
     :param bool bead_positive: will average only bead positive cells sitting in designated layer and receiving input from designated source, default = False
     """
     
+    #first run function to get all cell files you want to use. Inputs are the same input to average_map_stack function 
     cells_to_average_df,cell_IDs,printout=get_cells_to_average(input_source=input_source, 
                          layer = layer,
                          by_layer_bin = by_layer_bin,
@@ -237,7 +246,7 @@ def average_map_stack(input_source, layer,
                          by_Mtype = by_Mtype,
                          bead_positive = bead_positive)
     
-    numCells = np.shape(cell_IDs)[0]
+    numCells = np.shape(cell_IDs)[0] #total number of cells to grab 
    
     # initiate variables 
     mapSpacing = np.zeros((1,numCells)) #spacing
@@ -251,7 +260,7 @@ def average_map_stack(input_source, layer,
     # start for loop to load in cells now
     for i,n in enumerate(cell_IDs):
         #load cells 
-        cellA = m2p.mstruct2pydict(n) #use Mike's parcer to take .m files that have already been processed 
+        cellA = m2p.mstruct2pydict(n) #use parcer to take .m files that have already been processed. Note: for full python, upade to load in datafiles of individual maps! 
         cellA_mean = cellA['mean'] #define the map 
         XY[i] = cellA['soma1Coordinates'] #save coordinates 
         [a,b] = cellA_mean.shape
@@ -301,7 +310,7 @@ def average_map_stack(input_source, layer,
     newmap_soma = np.zeros(([numCells,2*r,2*c]))
 
     for n in range(0,numCells):
-        newmap_soma[n,:,:] = sCRACM_cellShifter(M[n,:,:],XY[n,:],dx,trueRowNumber_arr[n])
+        newmap_soma[n,:,:] = sCRACM_cellShifter(M[n,:,:],XY[n,:],dx,trueRowNumber_arr[n]) #use the cell shifter to align all maps by their soma coordinates (center on soma)
         X_soma[n] = X[n]-XY[n,0]
         Y_soma[n]= Y[n]+XY[n,1]
     maps_soma = newmap_soma[:,int((1+r/2)-rcAddOn/2):int((r+r/2)+rcAddOn/2+1),int((1+c/2)-rcAddOn/2):int((c+c/2)+rcAddOn/2+1)]
@@ -693,6 +702,9 @@ def collapse_map(input_source):
     plt.title(input_source+': Normalized current collapsed on x axis',color='w');
 
 
+
+#note: for bead comparison code: need to fix dataframe slicing: Use explicit indexing! 
+
 def bead_comparison(input_source,save = False):
     
     """
@@ -705,12 +717,7 @@ def bead_comparison(input_source,save = False):
     SCdf = load_sCRACMdatabase()
     #filter for bead postive only 
     bead_df = SCdf[(SCdf['Bead Positive?']==True)& (SCdf['MapForAnalysis']==True)]
-    #calculate ratio thickness and put into a column 
-    bead_df['ratio_thickness'] = bead_df['piadistance']/bead_df['cortical thickness']
-    # annotate to give each cell a layer identity based on bins 
-    labels = ['L2','L3','L5','L6','Claustrum']
-    bins = [0,0.231,0.4080,0.65275,0.848617,1]
-    bead_df['layer_bin']= pd.cut(bead_df['ratio_thickness'],bins=bins,labels = labels)
+    annotate_layers(bead_df) #annotate layer identities for each cell. 
 
 
     #get total integration for bead postive and bead negative 
