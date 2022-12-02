@@ -1,0 +1,285 @@
+experimentNumber,amplifierNumber,negativeControl,soma1Coordinates,horizontalVideoDistance,verticalVideoDistance,distanceToPia,cortexThickness,layer1Row,laserPower,pulseWidth,xSpacing,ySpacing,numberOfMaps,onset,minOnset,minimum,mean,integral
+IG0624,1,nan,"[15.393261052640561, -5.920094101047648]",2657,1993,488,1220,3,"[3.028, 3.225, 3.201]",nan,50,50,3,"[[   nan    nan    nan    nan    nan    nan    nan    nan    nan    nan
+     nan    nan]
+ [   nan    nan    nan    nan    nan    nan    nan    nan    nan    nan
+     nan    nan]
+ [   nan    nan    nan    nan    nan    nan    nan    nan    nan    nan
+     nan    nan]
+ [   nan    nan    nan    nan    nan    nan    nan    nan    nan    nan
+     nan    nan]
+ [   nan    nan    nan    nan    nan    nan    nan    nan    nan    nan
+     nan    nan]
+ [   nan    nan    nan    nan    nan 0.016  0.0193    nan    nan    nan
+     nan    nan]
+ [   nan    nan    nan    nan    nan    nan 0.0157    nan    nan    nan
+     nan    nan]
+ [   nan    nan    nan    nan    nan    nan    nan    nan    nan    nan
+     nan    nan]
+ [   nan    nan    nan    nan    nan    nan    nan    nan    nan    nan
+     nan    nan]
+ [   nan    nan    nan    nan    nan    nan    nan    nan    nan    nan
+     nan    nan]
+ [   nan    nan    nan    nan    nan 0.0166 0.0125 0.0128 0.0153    nan
+     nan    nan]
+ [0.022     nan    nan    nan    nan 0.0115 0.0112 0.0114 0.0158    nan
+     nan    nan]
+ [   nan    nan    nan    nan    nan 0.0108 0.011  0.0134    nan    nan
+     nan    nan]
+ [   nan    nan    nan    nan    nan    nan 0.012  0.0133 0.0109    nan
+     nan    nan]
+ [   nan    nan    nan    nan    nan    nan 0.0109 0.0116 0.015     nan
+     nan    nan]
+ [   nan    nan    nan    nan    nan    nan 0.016     nan    nan    nan
+     nan    nan]
+ [   nan    nan    nan    nan    nan    nan    nan    nan    nan    nan
+     nan    nan]
+ [   nan    nan    nan    nan    nan    nan    nan    nan    nan    nan
+     nan    nan]
+ [   nan    nan    nan    nan    nan    nan    nan    nan    nan    nan
+     nan    nan]
+ [   nan    nan    nan    nan    nan    nan    nan    nan    nan    nan
+     nan    nan]
+ [   nan    nan    nan    nan    nan    nan    nan    nan    nan    nan
+     nan    nan]
+ [   nan    nan    nan    nan    nan    nan    nan    nan    nan    nan
+     nan    nan]
+ [   nan    nan    nan    nan    nan    nan    nan    nan    nan    nan
+     nan    nan]
+ [   nan    nan    nan    nan    nan    nan    nan 0.0307    nan    nan
+     nan    nan]]","[[   nan    nan    nan    nan    nan    nan    nan    nan    nan    nan
+     nan    nan]
+ [   nan    nan    nan    nan    nan    nan    nan    nan    nan    nan
+     nan    nan]
+ [   nan    nan    nan    nan    nan    nan    nan    nan    nan    nan
+     nan    nan]
+ [   nan    nan    nan    nan    nan    nan    nan    nan    nan    nan
+     nan    nan]
+ [   nan    nan    nan    nan    nan    nan    nan    nan    nan    nan
+     nan    nan]
+ [   nan    nan    nan    nan    nan 0.0185 0.0205    nan    nan    nan
+     nan    nan]
+ [   nan    nan    nan    nan    nan    nan 0.0242    nan    nan    nan
+     nan    nan]
+ [   nan    nan    nan    nan    nan    nan    nan    nan    nan    nan
+     nan    nan]
+ [   nan    nan    nan    nan    nan    nan    nan    nan    nan    nan
+     nan    nan]
+ [   nan    nan    nan    nan    nan    nan    nan    nan    nan    nan
+     nan    nan]
+ [   nan    nan    nan    nan    nan 0.0189 0.0176 0.02   0.0199    nan
+     nan    nan]
+ [0.0222    nan    nan    nan    nan 0.0133 0.0167 0.0141 0.0172    nan
+     nan    nan]
+ [   nan    nan    nan    nan    nan 0.013  0.0167 0.0188    nan    nan
+     nan    nan]
+ [   nan    nan    nan    nan    nan    nan 0.0159 0.0165 0.0142    nan
+     nan    nan]
+ [   nan    nan    nan    nan    nan    nan 0.0168 0.0163 0.0162    nan
+     nan    nan]
+ [   nan    nan    nan    nan    nan    nan 0.0201    nan    nan    nan
+     nan    nan]
+ [   nan    nan    nan    nan    nan    nan    nan    nan    nan    nan
+     nan    nan]
+ [   nan    nan    nan    nan    nan    nan    nan    nan    nan    nan
+     nan    nan]
+ [   nan    nan    nan    nan    nan    nan    nan    nan    nan    nan
+     nan    nan]
+ [   nan    nan    nan    nan    nan    nan    nan    nan    nan    nan
+     nan    nan]
+ [   nan    nan    nan    nan    nan    nan    nan    nan    nan    nan
+     nan    nan]
+ [   nan    nan    nan    nan    nan    nan    nan    nan    nan    nan
+     nan    nan]
+ [   nan    nan    nan    nan    nan    nan    nan    nan    nan    nan
+     nan    nan]
+ [   nan    nan    nan    nan    nan    nan    nan 0.0505    nan    nan
+     nan    nan]]","[[         nan          nan          nan          nan          nan
+           nan          nan          nan          nan          nan
+           nan          nan]
+ [         nan          nan          nan          nan          nan
+           nan          nan          nan          nan          nan
+           nan          nan]
+ [         nan          nan          nan          nan          nan
+           nan          nan          nan          nan          nan
+           nan          nan]
+ [         nan          nan          nan          nan          nan
+           nan          nan          nan          nan          nan
+           nan          nan]
+ [         nan          nan          nan          nan          nan
+           nan          nan          nan          nan          nan
+           nan          nan]
+ [         nan          nan          nan          nan          nan
+  -16.21865625 -17.08365129          nan          nan          nan
+           nan          nan]
+ [         nan          nan          nan          nan          nan
+           nan -12.97492502          nan          nan          nan
+           nan          nan]
+ [         nan          nan          nan          nan          nan
+           nan          nan          nan          nan          nan
+           nan          nan]
+ [         nan          nan          nan          nan          nan
+           nan          nan          nan          nan          nan
+           nan          nan]
+ [         nan          nan          nan          nan          nan
+           nan          nan          nan          nan          nan
+           nan          nan]
+ [         nan          nan          nan          nan          nan
+  -20.3273826  -20.75988002 -17.0836513  -27.03109378          nan
+           nan          nan]
+ [-10.16369126          nan          nan          nan          nan
+  -45.19598901 -37.84353147 -29.19358135 -30.70732262          nan
+           nan          nan]
+ [         nan          nan          nan          nan          nan
+  -34.816049   -57.52216798 -21.1923776           nan          nan
+           nan          nan]
+ [         nan          nan          nan          nan          nan
+           nan -45.84473519 -39.78977019 -16.00240756          nan
+           nan          nan]
+ [         nan          nan          nan          nan          nan
+           nan -57.30591909 -29.62607896 -22.0573726           nan
+           nan          nan]
+ [         nan          nan          nan          nan          nan
+           nan -11.67743251          nan          nan          nan
+           nan          nan]
+ [         nan          nan          nan          nan          nan
+           nan          nan          nan          nan          nan
+           nan          nan]
+ [         nan          nan          nan          nan          nan
+           nan          nan          nan          nan          nan
+           nan          nan]
+ [         nan          nan          nan          nan          nan
+           nan          nan          nan          nan          nan
+           nan          nan]
+ [         nan          nan          nan          nan          nan
+           nan          nan          nan          nan          nan
+           nan          nan]
+ [         nan          nan          nan          nan          nan
+           nan          nan          nan          nan          nan
+           nan          nan]
+ [         nan          nan          nan          nan          nan
+           nan          nan          nan          nan          nan
+           nan          nan]
+ [         nan          nan          nan          nan          nan
+           nan          nan          nan          nan          nan
+           nan          nan]
+ [         nan          nan          nan          nan          nan
+           nan          nan -12.5424275           nan          nan
+           nan          nan]]","[[ 0.          0.          0.          0.          0.          0.
+   0.          0.          0.          0.          0.          0.        ]
+ [ 0.          0.          0.          0.          0.          0.
+   0.          0.          0.          0.          0.          0.        ]
+ [ 0.          0.          0.          0.          0.          0.
+   0.          0.          0.          0.          0.          0.        ]
+ [ 0.          0.          0.          0.          0.          0.
+   0.          0.          0.          0.          0.          0.        ]
+ [ 0.          0.          0.          0.          0.          0.
+   0.          0.          0.          0.          0.          0.        ]
+ [ 0.          0.          0.          0.          0.         -2.66966289
+  -1.39033529  0.          0.          0.          0.          0.        ]
+ [ 0.          0.          0.          0.          0.          0.
+  -2.44389921  0.          0.          0.          0.          0.        ]
+ [ 0.          0.          0.          0.          0.          0.
+   0.          0.          0.          0.          0.          0.        ]
+ [ 0.          0.          0.          0.          0.          0.
+   0.          0.          0.          0.          0.          0.        ]
+ [ 0.          0.          0.          0.          0.          0.
+   0.          0.          0.          0.          0.          0.        ]
+ [ 0.          0.          0.          0.          0.         -2.94992131
+  -4.03145336 -2.14461094 -4.78976565  0.          0.          0.        ]
+ [-1.36352046  0.          0.          0.          0.         -7.35361085
+  -4.80994887 -4.16062595 -0.54667685  0.          0.          0.        ]
+ [ 0.          0.          0.          0.          0.         -5.99585703
+  -9.91543774 -3.29620763  0.          0.          0.          0.        ]
+ [ 0.          0.          0.          0.          0.          0.
+  -5.17238179 -3.03123083 -3.866816    0.          0.          0.        ]
+ [ 0.          0.          0.          0.          0.          0.
+  -6.93005163 -5.1178871  -1.33728227  0.          0.          0.        ]
+ [ 0.          0.          0.          0.          0.          0.
+  -1.54401608  0.          0.          0.          0.          0.        ]
+ [ 0.          0.          0.          0.          0.          0.
+   0.          0.          0.          0.          0.          0.        ]
+ [ 0.          0.          0.          0.          0.          0.
+   0.          0.          0.          0.          0.          0.        ]
+ [ 0.          0.          0.          0.          0.          0.
+   0.          0.          0.          0.          0.          0.        ]
+ [ 0.          0.          0.          0.          0.          0.
+   0.          0.          0.          0.          0.          0.        ]
+ [ 0.          0.          0.          0.          0.          0.
+   0.          0.          0.          0.          0.          0.        ]
+ [ 0.          0.          0.          0.          0.          0.
+   0.          0.          0.          0.          0.          0.        ]
+ [ 0.          0.          0.          0.          0.          0.
+   0.          0.          0.          0.          0.          0.        ]
+ [ 0.          0.          0.          0.          0.          0.
+   0.         -4.1473627   0.          0.          0.          0.        ]]","[[ 6.33500715e-02  2.92800797e-02 -8.16014664e-02 -5.02129599e-02
+   4.52932997e-02 -2.66418469e-02 -1.69755270e-01  2.94530797e-02
+   1.08697434e-01 -9.09325986e-03 -5.45811841e-02  1.42724172e-02]
+ [ 1.15368700e-02 -3.33563700e-02  1.44562288e-02  2.05111939e-02
+   1.44562280e-02 -7.67682796e-04 -5.44622481e-02 -5.79006019e-02
+   7.55248758e-02 -8.49641344e-02  8.09851539e-03 -2.33981150e-02]
+ [ 9.42087677e-02 -9.01757251e-03  1.40291376e-01 -9.08136624e-02
+   4.24171928e-02 -4.39633703e-02  8.64994353e-04  1.01161165e-01
+  -1.11908729e-01  1.60413322e-01  2.32218720e-01  8.21745250e-02]
+ [-1.32311798e-01  9.83931287e-04  1.08881245e-02  1.14287462e-02
+   6.99564712e-02  2.29439928e-02  1.04437335e-01 -8.75807477e-03
+   3.24589372e-02 -1.08535247e-01 -1.14719962e-01  1.22331918e-01]
+ [ 1.55839661e-01  5.71004818e-02  4.56825486e-02 -9.35708337e-02
+  -6.78480457e-02 -6.53719974e-02 -7.49193796e-02  9.19057195e-03
+  -1.21639918e-02  2.33548644e-02 -9.83391188e-02 -1.65830353e-01]
+ [ 6.67235513e-02 -1.99056970e-02 -1.58283273e-01  2.23384958e-01
+  -1.10946422e-01 -2.00213905e-01 -1.04383271e-01 -1.72501628e-01
+  -2.30304921e-02  4.45148054e-02  7.23784559e-02  1.00804356e-01]
+ [ 5.40621805e-03 -1.92785762e-02 -2.27277442e-02 -7.14702121e-03
+   8.35693294e-02 -9.19705935e-02 -1.83454628e-01 -6.97942839e-02
+   2.49724056e-01  7.28758361e-03 -9.70632517e-02  2.48686552e-04]
+ [-1.47741146e-01 -2.53443533e-02 -1.39945379e-01 -9.78633721e-02
+   1.51125439e-01  1.28776129e-02  2.37873597e-03 -3.36050551e-02
+  -6.74587975e-02  1.75604797e-01  3.90523617e-01  1.18666501e-01]
+ [-1.27716513e-01 -3.58324175e-02  1.20526241e-01  3.16371918e-02
+  -1.37404456e-01 -2.57768513e-02 -2.23817465e-02  1.37317912e-03
+   1.99597596e-01  1.00782731e-01  2.86637715e-02 -2.28034305e-02]
+ [ 1.49103512e-02 -7.65304334e-02  1.01420664e-01 -1.71679883e-01
+   1.71809639e-02  6.62802413e-02  2.00938338e-01 -9.39276441e-02
+   1.06232198e-01  6.23985758e-02  1.27327264e-01 -7.93741040e-02]
+ [-4.03087671e-02 -8.77753678e-02 -1.16331015e-01  1.19174685e-01
+  -3.06965100e-02 -2.21157598e-01 -3.02337377e-01 -1.60910695e-01
+  -3.59048612e-01  1.20828989e-01 -7.35137626e-02 -1.43913545e-02]
+ [-1.02404597e-01  2.27763996e-01 -9.52359492e-02 -3.01234510e-02
+   1.51666061e-01 -5.51466751e-01 -3.60908352e-01 -3.12003697e-01
+  -4.12278251e-02  3.11938825e-02 -1.28776125e-02  2.52589352e-01]
+ [-4.86451561e-02  1.44237906e-02 -1.34777034e-01 -8.88998617e-02
+  -1.80048709e-01 -4.49635215e-01 -7.43733517e-01 -2.46999323e-01
+  -3.56161693e-02 -2.15837877e-01 -1.60370073e-01 -4.87640959e-03]
+ [-1.29003192e-01 -3.73137220e-02 -4.83315954e-02  3.12911938e-02
+  -4.34551867e-02  9.08461000e-02 -3.87982696e-01 -2.27461249e-01
+  -2.90216636e-01 -3.77462191e-02 -1.67538719e-01 -1.27143452e-01]
+ [-5.51650557e-02  4.81045351e-02 -8.24988981e-02 -1.68068528e-01
+   1.36323212e-01 -1.98754227e-01 -5.19548436e-01 -3.83711783e-01
+  -1.00209671e-01  2.06052620e-01  1.10503117e-02 -2.08680049e-02]
+ [-1.10524736e-01 -1.60380885e-01  4.79423484e-02  1.19931557e-01
+  -1.98300103e-02  1.61862189e-01 -1.16071517e-01 -3.00910131e-02
+   2.25979945e-02  8.39477644e-02  1.03366912e-02  9.86634918e-02]
+ [ 3.93032108e-02  8.50398204e-02 -4.18765712e-02  1.48627766e-01
+   7.62384967e-02 -6.65938020e-02 -8.50398202e-02 -4.14008231e-02
+  -1.47373532e-02 -9.81012457e-02 -1.06491697e-01 -1.96040304e-01]
+ [-7.33299517e-02  2.06517571e-03 -1.19380123e-01  8.02174740e-02
+   8.11365304e-02 -5.57273023e-02 -1.82027385e-01  9.49980756e-02
+  -1.80567710e-03  5.22889489e-02 -9.42844550e-02  3.85463392e-02]
+ [ 2.71392124e-03 -1.45102908e-02 -5.08725179e-02  1.46357154e-01
+   3.62000399e-02 -3.53674833e-02 -4.76720371e-02 -9.65983164e-02
+   1.16222891e-01  1.93564256e-01 -1.08697434e-01 -6.86914154e-02]
+ [-1.13638725e-02 -4.05250158e-02 -5.32728793e-02 -3.74434709e-02
+   9.22300913e-03 -7.49085674e-02  6.91022892e-02 -4.75639130e-02
+  -3.52701709e-02 -1.32127982e-02 -9.77444421e-03  2.65012847e-02]
+ [ 2.48977999e-01 -6.01171562e-03  2.31818655e-02  1.43297234e-01
+  -1.20072118e-01 -1.93542685e-03 -8.57426209e-03  2.41333605e-02
+   6.92212246e-02  1.36680023e-01  2.96260780e-02  1.37480143e-01]
+ [ 1.56542471e-01  3.71731604e-02 -6.09929610e-02 -3.55512943e-02
+  -1.08675809e-01 -9.29869157e-04 -5.27971324e-02 -2.56254766e-02
+   2.02516949e-02  5.36513154e-02 -2.54957270e-02  2.33548650e-02]
+ [ 5.53813056e-02 -2.28401930e-01 -5.48298703e-02 -9.03379161e-02
+   1.07572940e-01 -3.99519567e-02  8.06607784e-03  2.81015248e-02
+  -7.90605432e-02  3.16371919e-02 -2.16356872e-02  2.75933410e-02]
+ [ 1.05529389e-02  6.53071217e-02  1.55234166e-01  1.68890274e-01
+   1.23305038e-01 -8.92782964e-02 -1.63159679e-02 -3.10554830e-01
+  -5.14563897e-02  2.82637112e-02 -2.69337819e-02 -1.10038177e-01]]"

@@ -3,6 +3,17 @@ Averaging and plotting sCRACM data
 
 Functions: 
 Helpers:
+    - _check_keys: checks if entries in dic are mat-objects, if yes, todict is called to change to nested dicts 
+    - _todict: recursive, contructs from nested dicts 
+    - loadmat: use function instead of scipy.io.loadmat, cures problem of not properly recovering python dicts from mat and .m files. 
+    - cart2pol: cartesian to polar coordinate transformer 
+    - pol2cart: polar to cartesian coordinate transformer 
+    - somaPositionTransformer: takes raw soma coordinates from sCRACM map (designated during experiment) and applies rotation and pattern offset 
+    - analysisPlots: plots sCRACM maps (mean, min, onset, charge) for a single cell 
+    - mousePoints: called by measure_points, stores left mouse click coordinates when clicking on .tif image. Measures real world distance between points 
+    - measure_points: driver function for mousePoints, used to measure distance between microscope .tif image (4x LSPS rig calibration only)
+    - loadXSG: helper function called by averageMaps, takes amplifer number. Will open a matlab XSG file from a single mapping sweep, and saves salient data in python dictionary.
+    - averageMaps: helper function used to average multiple sweeps from a single experiment into one map. 
     - load_sCRACMdatabase: loads databse with meta data, includes dates and cell IDs
     - annotate_layers: gives layer assignments to cells based on cortical depth
     - sCRACM_cellShifter: shifts sCRACM maps up or down (adds rows/cols) to alignm by soma
@@ -11,6 +22,7 @@ Helpers:
     - get_cells_to_average: makes list of file locations for cells 
     - average_map_stack: returns stack of aligned maps, based on input dependent filters
 Execution/plotting functions: 
+    - analyzeSCRACMmap: used to average sweeps from a single experiment into one map, optioal save flag to save .csv file for cell, used by all later functions. 
     - average_map: plots average maps (soma and pia aligned) based in input dependent filters
     - page_through_maps: returns interactive plot, allowing user to scroll through all maps 
     making up a particular average map 
@@ -18,33 +30,637 @@ Execution/plotting functions:
     heatmaps of each cell, arranged from superfical to deep layer cells 
     - bead_comparison: plots paired charts showing total integration of bead positive cells 
     against negative controls per input source, per layer. Returns ttest stats for each layer
+
+Citations and such: 
+Much of the sCRACM map averaing has been adapted, with permission, from Petreanu et al., 2009: https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2745650/  (original code writen in Matlab)
+
 """
 
-from IPython.core.display import display, HTML
-display(HTML("<style>.container { width:100% !important; }</style>"))
+#imports 
 import numpy as np
-from scipy import optimize, stats
+import pandas as pd
+import scipy as sc
+from scipy import optimize, stats,io
 import math
 import seaborn as sns
-import matplotlib.pylab as plt
+import matplotlib.pyplot as plt
 import matplotlib.lines as mlines
 import matplotlib.transforms as mtransforms
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
-import pandas as pd
 import os
 import sys
 from tqdm.notebook import tqdm
-from IPython.core.display import display, HTML
-display(HTML("<style>.container { width:100% !important; }</style>"))
-np.set_printoptions(threshold=sys.maxsize)
-sys.path.insert(0, '/Users/iangingerich/Desktop/morph_analysis/') #to direct python to location of interpreter! 
-import mstruct2pydict as m2p 
 from plotly import graph_objects as go
+from tkinter import filedialog
+import cv2
+import csv
+
 
 #define path to analysis files. Hard coded for now 
 analysis_path = '/Users/iangingerich/Dropbox (OHSU)/Ian_Tianyi_shared/Databases/Analyzed_cells/'
 
-# 
+def _check_keys( dict):
+    """
+    checks if entries in dictionary are mat-objects. If yes
+    todict is called to change them to nested dictionaries
+    """
+    for key in dict:
+        if isinstance(dict[key], io.matlab.mio5_params.mat_struct):
+            dict[key] = _todict(dict[key])
+    return dict
+
+def _todict(matobj):
+    """
+    A recursive function which constructs from matobjects nested dictionaries
+    """
+    dict = {}
+    for strg in matobj._fieldnames:
+        elem = matobj.__dict__[strg]
+        if isinstance(elem, io.matlab.mio5_params.mat_struct):
+            dict[strg] = _todict(elem)
+        else:
+            dict[strg] = elem
+    return dict
+
+def loadmat(filename):
+    """
+    this function should be called instead of direct scipy.io .loadmat
+    as it cures the problem of not properly recovering python dictionaries
+    from mat files. It calls the function check keys to cure all entries
+    which are still mat-objects
+    """
+    data = io.loadmat(filename, struct_as_record=False, squeeze_me=True)
+    return _check_keys(data)
+
+
+#cartesian to polar coordinates transformer 
+def cart2pol(x, y):
+    '''
+    Parameters:
+    - x: float, x coord. of vector end
+    - y: float, y coord. of vector end
+    Returns:
+    - r: float, vector amplitude
+    - theta: float, vector angle
+    '''
+
+    z = x + y * 1j
+    r,theta = np.abs(z), np.angle(z)
+
+    return r,theta
+
+def pol2cart(r,theta):
+    '''
+    Parameters:
+    - r: float, vector amplitude
+    - theta: float, vector angle
+    Returns:
+    - x: float, x coord. of vector end
+    - y: float, y coord. of vector end
+    '''
+
+    z = r * np.exp(1j * theta)
+    x, y = z.real, z.imag
+    return x,y
+    
+
+def somaPositionTransformer(somaX,somaY,spatialRotation,xPatternOffset,yPatternOffset):
+    """"
+    Helper function, will take original soma coordinates (x,y) aquired during experiment
+    apply rotation and pattern offset to allow for accurate plotting on top of map.
+    """
+    somaXoffset = somaX - xPatternOffset
+    somaYoffset = somaY - yPatternOffset
+    rotationAngleRadians = (-1)*spatialRotation*(math.pi/180)
+
+    rho,theta = cart2pol(somaXoffset,somaYoffset)
+    somaXnew,somaYnew = pol2cart(rho,theta+rotationAngleRadians)
+    #print('new coords inside transform function:'+str(somaXnew)+','+str(somaYnew))
+    return somaXnew,somaYnew
+
+def analysisPlots(map_dict,ampNum):
+    """"
+    Helper function, plots analysis plots (mean, min,onset,charge)
+    after averaging on single cell 
+    """
+
+    #to plot 
+    mean= map_dict['mean']
+    minimum = map_dict['minimum']
+    onset = map_dict['onset']
+    integral = map_dict['integral']
+
+    to_plot = [mean,minimum,onset,integral]
+
+    mapSpacing = 50
+    rcAddOn =0
+    somax = map_dict['soma1Coordinates'][0]
+    somay = -map_dict['soma1Coordinates'][1]
+    #print('somaY cord that plotting function is getting: '+str(somay))
+    fig,ax = plt.subplots(2,2,sharex = 'col',sharey='row',figsize=(16,12))
+    ax = ax.flatten()
+
+    [r,c] = np.shape(mean)
+    dx = mapSpacing #50
+    dy = mapSpacing #50 
+    xdata = np.arange(0,(c*dx),dx) - int((c-1) * dx/2)
+    ydata = np.arange(0,(r*dx),dx) - int((r-1) * dx/2)
+    xmax = (c+rcAddOn)*dx/2   #xmax = (map size in x direction * map spacing) - (mapsize in x)*50/2 * note: I removed the c-1 and r-1 to fix the problem with the soma plotting
+    xmin = -xmax # x data is centered on 0, so min and max are the same here, with signs reversed
+    ymax = (r+rcAddOn)*dx/2 #ydata also centered on zero
+    ymin = -ymax
+
+    for n in range(np.shape(to_plot)[0]):
+        img = ax[n].imshow(to_plot[n],aspect =
+                      'auto', cmap = 'magma_r',extent = [xmin,xmax,ymax,ymin]);
+        img.axes.tick_params(color = 'white',labelcolor = 'white')
+        ax[n].plot(somax,somay,'^',markersize=10, color='b');
+        cbaxes = inset_axes(ax[n],width = "3%", height = "75%",loc = 'lower right')
+        color_bar = plt.colorbar(img,cax=cbaxes);
+        color_bar.ax.yaxis.set_tick_params(color = 'white')
+        plt.setp(plt.getp(color_bar.ax.axes,'yticklabels'),color='white')
+    ax[0].set_title('Mean EPSC',color = 'white')
+    ax[1].set_title('Minimum',color = 'white')
+    ax[2].set_title('Onset',color = 'white')
+    ax[3].set_title('Charge',color = 'white')    
+
+#function to store pixel values when we do a left mouse click 
+def mousePoints(event,x,y,flags,params):
+    """function to capture coordinates of mouse clicks on a .tif image. Needs a driver function
+    to be called."""
+    global previous_point
+    #left button click 
+    if event == cv2.EVENT_LBUTTONDOWN:
+        if previous_point:
+            x2,y2 = previous_point
+            dist = ((x-x2)**2 + (y-y2)**2 )**0.5
+            real_dist =(dist/1600)*2657 #note: the horizontal width is for the 4x objective 
+            #on the rig. image width defaul is 1600 (rig camara default is 1200by1600)
+            print('distance:')
+            print(f'{real_dist} um')
+            cv2.line(img,(x,y),(x2,y2),(0,0,0),2)
+            #redraw point to hide begining of line 
+            cv2.circle(img,(x2,y2),3,(0,0,255),-1)
+        
+        cv2.circle(img,(x,y),3,(0,0,255),-1)
+        cv2.imshow('image',img)
+        previous_point = (x,y)
+
+def mousePoints(event,x,y,flags,img):
+    """helper function, stores mouse click coordinates 
+    and converts to real world distances between points. Calibrated to 4x objective on
+    LSPS rig. """
+    global previous_point
+    #left button click 
+    if event == cv2.EVENT_LBUTTONDOWN:
+        if previous_point!= None:
+            x2,y2 = previous_point
+            dist = ((x-x2)**2 + (y-y2)**2 )**0.5
+            real_dist =(dist/1600)*2657 #note: the horizontal width is for the 4x objective 
+            #on the rig. image width defaul is 1600 (rig camara default is 1200by1600)
+            print('distance:')
+            print(f'{real_dist} um')
+            cv2.line(img,(x,y),(x2,y2),(0,0,0),2)
+            #redraw point to hide begining of line 
+            cv2.circle(img,(x2,y2),3,(0,0,255),-1)
+        
+        cv2.circle(img,(x,y),3,(0,0,255),-1)
+        cv2.imshow('image',img)
+        previous_point = (x,y)
+
+def measure_points():
+    """Driver function used to measure micron distance between 
+    two mouse clicks on a .tif image"""
+    global previous_point
+    
+    previous_point = None #initialize the point_counter, should always start at None
+    img_path = filedialog.askopenfilename();
+    img=cv2.imread(img_path)
+    
+
+    
+    cv2.imshow('image', img)
+    cv2.setMouseCallback('image',mousePoints,img)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+    cv2.waitKey(1);
+
+def loadXSG(ampNumber):
+    """ This helper function is called by averageMaps() and takes the amplifier number from an experiment, 
+     and opens a pop up dialogue for you to select a specific .XSG map file (Matlab data file). It will parse the 
+     selected file, and return a dictionary of parameters used for sCRACM and LSPS map averaging.
+    """
+    #1: open dialogue box
+    xsg_path = filedialog.askopenfilename()
+    #load using loadmat function 
+    xsg_file = loadmat(xsg_path) 
+    
+    #make new dict, keep only important info
+    #assing to dict using class object, allows for easy assignment
+    class NewClass(object): pass
+    map_dict = NewClass()
+
+    #info needed: 
+
+    #sample rate 
+    map_dict.sampleRate = xsg_file['header']['ephys']['ephys']['sampleRate'] #sample rate 
+    sr = xsg_file['header']['ephys']['ephys']['sampleRate'] 
+    # trace data 
+    ampNumber = 1 #note, hard coded for now. Fix when turning into a function! 
+    if ampNumber == 1:
+        traceData = xsg_file['data']['ephys']['trace_1']
+    elif ampNumber == 2: 
+        traceData = xsg_file['data']['ephys']['trace_2']
+    traceLength = xsg_file['header']['mapper']['mapper']['isi'] * sr
+    #reshape trace, make each laser flash data a individual row!
+    # (768000,1) reshaped to (4000,192)
+    #note: you must use Fortran-like index ordering to get correct ordering
+    #becuase we want "unstack" the data columnwise. 
+    map_dict.traces= np.reshape(traceData,(int(traceLength),int(len(traceData)/traceLength)),order = 'F')
+    
+    #possibly add step to create a new dictionary with just the relevant information
+    # possibly add step to reshape the traceData from [4000,] to [4000,1] array
+    traceLength = xsg_file['header']['mapper']['mapper']['isi'] * sr
+    # pattern
+    map_dict.pattern = xsg_file['header']['mapper']['mapper']['mapPatternArray']
+    # spacing (x and y)
+    map_dict.xSpacing = xsg_file['header']['mapper']['mapper']['xSpacing']
+    map_dict.ySpacing = xsg_file['header']['mapper']['mapper']['ySpacing']
+    # laser power
+    map_dict.laserPower = xsg_file['header']['mapper']['mapper']['specimenPlanePower']
+    #sampling rate: defined earlier: include in the data structure as well
+    # soma coordinates 
+    map_dict.soma1Coordinates = xsg_file['header']['mapper']['mapper']['soma1Coordinates']
+    #print(f"from raw xsg: "+str(xsg_file['header']['mapper']['mapper']['soma1Coordinates']))
+    map_dict.soma2Coordinates = xsg_file['header']['mapper']['mapper']['soma2Coordinates']
+    # experiment number 
+    map_dict.experimentNumber = xsg_file['header']['xsg']['xsg']['initials'] + xsg_file['header']['xsg']['xsg']['experimentNumber']
+    # pattern rotation
+    map_dict.patternRotation = xsg_file['header']['mapper']['mapper']['patternRotation']
+    # pattern flip bool
+    map_dict.patternFlip = xsg_file['header']['mapper']['mapper']['patternFlip']
+    # spatial rotation
+    map_dict.spatialRotation = xsg_file['header']['mapper']['mapper']['spatialRotation']
+    # pattern offset 
+    map_dict.xPatternOffset = xsg_file['header']['mapper']['mapper']['xPatternOffset']
+    map_dict.yPatternOffset = xsg_file['header']['mapper']['mapper']['yPatternOffset']
+    # voltage step
+    map_dict.voltageStep = xsg_file['header']['ephys']['ephys']['pulseParameters']['amplitude']
+    # voltage step start time and width 
+    map_dict.VStepStartT= xsg_file['header']['ephys']['ephys']['pulseParameters']['squarePulseTrainDelay']
+    map_dict.VstepWidth = xsg_file['header']['ephys']['ephys']['pulseParameters']['squarePulseTrainWidth']
+    # horizontal and vertical video distance 
+    try: 
+        map_dict.horizontalVideoDistance = xsg_file['header']['imagingSys']['imagingSys']['xMicrons']
+        map_dict.verticalVideoDistance = xsg_file['header']['imagingSys']['imagingSys']['yMicrons']
+    except:
+        map_dict.horizontalVideoDistance = 2657 #for 4x objective when the header is missing 
+        map_dict.verticalVideoDistance = 1993 
+    return map_dict.__dict__    
+
+def averageMaps(numMap):
+    """
+    takes a user defined number of map sweeps from a single experiment and averages map responses together. 
+    Assumptions: 1. stimulation for a single point occures after 100ms 
+                 2.  max response of single stimulation even takes place within 50ms of stimulation, or 1500 from start
+                 3. stimulation window is 1000 ms 
+    Other important details: 
+                1. A significant response must be > 6 std above baseline 
+                2. A significant reponse for a single point stimulation must be found in more than half of the maps, or it will be considered a spontaneous even and will be wiped out. 
+    """
+    ampNumber = 1 #default for now. If duel patch experiments, pull this to 
+    loadedData = {}
+    plotFlag = 1 #when != 0, plot individual maps 
+
+    #load in the xsg files cooresponding to the maps you want to investigate 
+    for i in range(numMap):
+        loadedData[i] = loadXSG(ampNumber)
+
+    # get small voltage injection to measure Rs for quality control 
+    RsVoltageStep = loadedData[0]['voltageStep']
+    VStepStartT = loadedData[0]['VStepStartT']
+    VStepWidth = loadedData[0]['VstepWidth'] #fix type, capitalieze Step here and in previous function
+    samplingRate = loadedData[0]['sampleRate']
+    VStepStartInd = VStepStartT*samplingRate
+    VStepEndInd = VStepStartInd + VStepWidth*samplingRate
+
+    noFlipTracker = 0
+
+
+    #Preallocate variables: 
+    plotFlag = 1
+    _,c=loadedData[0]['traces'].shape
+    laserPower = []
+    patternFlip = np.empty((1,numMap))
+    pattern = []
+    dataArray = []
+    Racc = np.empty((numMap,c))
+    Rtotal = np.empty((numMap,c))
+    Rinput = np.empty((numMap,c))
+    Rinput_ratio = np.empty((numMap,c))
+
+    for XSG_num in range(numMap):
+        laserPower.append(loadedData[XSG_num]['laserPower'])
+        patternFlip[0,XSG_num] = loadedData[XSG_num]['patternFlip']
+        pattern.append(loadedData[XSG_num]['pattern'])
+        _,c = loadedData[XSG_num]['traces'].shape
+        dataArray.append(loadedData[XSG_num]['traces'])
+        # use 5 ms before the end of the small votlage step to calculate steady state current and Rtotal
+        I_Rtotal = np.mean(dataArray[XSG_num][int(VStepEndInd)-50:int(VStepEndInd)-1],axis = 0)
+        #use immediate current after voltage step to calculate access resistance
+        I_Racc = np.min(dataArray[XSG_num][int(VStepStartInd):int(VStepStartInd)+50],axis = 0)
+        I_baseline = np.mean(dataArray[XSG_num][int(VStepStartInd)-50:int(VStepStartInd)-1],axis = 0)
+        RsVoltageStep_arr = np.full((1,c),RsVoltageStep)
+        #multiple by 1,000 to convert to mega Ohms
+        Racc[XSG_num,:] = RsVoltageStep_arr/(I_Racc-I_baseline)*1000
+        Rtotal[XSG_num,:] = RsVoltageStep_arr/(I_Rtotal-I_baseline)*1000
+        Rinput[XSG_num,:] = Rtotal[XSG_num,:]-Racc[XSG_num,:]
+        Rinput_ratio[XSG_num,:] = Rinput[XSG_num,:]/Rtotal[XSG_num,:]
+        rows,NumTraces = dataArray[XSG_num].shape
+        if noFlipTracker==0:#if non-flipped pattern has not been found, keep searching
+            if patternFlip[0,XSG_num]==0: #if current pattern is not flipped 
+                standardPattern = pattern[XSG_num] #use it as the standard pattern
+                noFlipTracker = 1 # update that non-flipped pattern has been found (no search in later loops)
+        if plotFlag: #if plotflag is something other than zero
+            test = 0 #put in code to plot traces as one map, one trial! 
+    if noFlipTracker==0: #if still no non-flipped pattern is found (all maps where flipped)
+        standardPattern = np.flip(pattern[0],axis = 1) #flip first pattern to get standard pattern
+
+
+    baselineStartIndex = 900 
+    baselineEndIndex = 999
+    stimOnInd = 1000
+    peakSearchEnd = 1500 #min val should come within 50ms of stimulation! 
+
+    # subtract mean baseline from dataArray 
+    #preallocate some variables: 
+
+    baselineMedians = np.empty((numMap,c))
+    SD = []
+    bsArray = []
+
+    #note: consider when baseline is influced by previous large response: may need to adjust this 
+    # next part 
+    for XSG_num in range(numMap):
+        baselineMedians[XSG_num,:]= np.median(dataArray[XSG_num][baselineStartIndex:baselineEndIndex],axis = 0)
+        baselineSDs = np.std(dataArray[XSG_num][baselineStartIndex:baselineEndIndex],axis = 0)
+        SD.append(np.mean(baselineSDs))
+        #baseline subtraced array
+        baselineArray = np.full((rows,c),baselineMedians[XSG_num])
+        bsArray.append(dataArray[XSG_num]-baselineArray)
+
+    eventDetectFactor = 6 # 6 SD, note, this may not match BCJ's analysis, check
+
+    if numMap ==1:
+        averageMap = bsArray[0]
+        averageBaseline = baselineMedians[0]
+    else: 
+        #preallocate variables 
+        traceStack = np.empty((bsArray[0].shape[0],c,numMap)) #specify size explicitly here (4000,numtraces,numMaps) 
+        baselineStack = np.empty((c,numMap)) #specify size so you can index into it to assign values
+        eventDetectFlag = np.empty((c,numMap)) #explicite size preallocation 
+
+        for j in range(numMap):
+            for i in range(NumTraces):
+                a,b = np.nonzero(standardPattern==i+1) #find 2d index of trace i in the standard map 
+                #pattern. Find the number (acquisition sequence) at position (a,b) in map pattern j 
+                #and extract cooresponding trace. From IG: note: the standard pattern goes from 1-192, 
+                # since it is indexed using Matlab 1 indexing, so add +1 to the iterator! 
+                trace = bsArray[j][:,pattern[j][a,b]-1] #IG: note, -1 to index back into bsArray, which is 
+                #indexed using 0th indexing! 
+                trace = np.reshape(trace,(bsArray[0].shape[0])) #reshape from (4000,1) to (4000,) array 
+                #to be able to broadcast into trace stack variable 
+                traceStack[:,i,j]=trace #made a list of all the traces. Possible make into 3d array instead if needed
+                baseline = baselineMedians[j][i]
+                baselineStack[i,j] = baseline
+                eventArr = trace[stimOnInd:peakSearchEnd]
+                # valley is defined by min within seach window - mean of 5ms baseline before stim
+                valleyofEvent = np.min(eventArr)-np.mean(trace[stimOnInd-50:stimOnInd])
+                eventDetectFlag[i,j] = np.abs(valleyofEvent)>np.abs(SD[j]*eventDetectFactor)
+
+    #wipe out spontaneous events: detected in less than half of iterations 
+    #sum the event-detection logic numbers of each tarce by row (aka across maps)
+    #possibly wiping out way more responses than necessary, IG: look into this 
+    
+    sumofEventDetectFlag = np.sum(eventDetectFlag,axis=1)
+
+    for i in range(NumTraces):
+        # if sum of event detection flags across all maps is less than half number of maps, 
+        #and is not 0, there is random events 
+        if sumofEventDetectFlag[i] <= numMap/2 and sumofEventDetectFlag[i] != 0:
+            #for each trace, find indices of map iterations that have spontaneous events.
+            #mapIDsofSpontaneousEvent is an array of interations numbers of maps with a spontaneous
+            #event during that trace (stim position)
+            mapIDofSpontaneousEvent = np.nonzero(eventDetectFlag[i,:]==1)
+            NoSponEvents = np.shape(mapIDofSpontaneousEvent)[0] #check to make sure this is correct! 
+            for x in range(NoSponEvents): #x is index in mapIDsofSpontaneousEvent
+                mapID = mapIDofSpontaneousEvent[x] #mapID is one of the map iDs that have spontaneous eent.
+                #replace spon event in the detection window with zero! 
+                traceStack[stimOnInd:peakSearchEnd,i,mapID] = 0
+
+    #plot traces as maps again after wiping out spontaneous events 
+
+    plotFlag2 = 1 
+    if plotFlag2 ==1:
+        for j in range(numMap):
+            #plotting code, colors one trial here 
+            something = 1
+
+    #avereging: 
+    #note: traceStack alignes with Matlab. 
+    averageMap = np.mean(traceStack,axis = 2)
+    averageBaseline = np.mean(baselineStack,axis=1)
+
+    #dict to save for the rest of the maps 
+    class NewClass(object): pass
+    map_dict = NewClass()
+
+    map_dict.experimentNumber = loadedData[0]['experimentNumber']
+    map_dict.pattern = pattern
+    map_dict.standardPattern = standardPattern
+    map_dict.Racc = Racc
+    map_dict.Rtotal = Rtotal
+    map_dict.Rinput_ratio = Rinput_ratio
+    map_dict.soma1Coordinates = loadedData[0]['soma1Coordinates']
+    map_dict.ampNumber = 1
+    map_dict.xSpacing = loadedData[0]['xSpacing']
+    map_dict.ySpacing = loadedData[0]['ySpacing']
+    map_dict.xPatternOffset = loadedData[0]['xPatternOffset']
+    map_dict.yPatternOffset = loadedData[0]['yPatternOffset']
+    map_dict.laserPower = laserPower
+    map_dict.traces = dataArray
+    map_dict.averageMap = averageMap
+    map_dict.baseline = averageBaseline
+    map_dict.samplingRate = loadedData[0]['sampleRate']
+    #map_dict.experimentNumber = loadedData[0]['experimentNumber']
+    map_dict.spatialRotation = loadedData[0]['spatialRotation']
+    map_dict.horizontalVideoDistance = loadedData[0]['horizontalVideoDistance']
+    map_dict.verticalVideoDistance = loadedData[0]['verticalVideoDistance']
+    map_dict = map_dict.__dict__
+    #print('soma coords after average: '+str(map_dict['soma1Coordinates']))
+    #QC PLOTTING:
+    #R access 
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ax.plot(map_dict['Racc'],'o');
+    ax.xaxis.label.set_color('white')
+    ax.yaxis.label.set_color('white')
+    fig.suptitle('Racc',color = 'white')
+    
+    #Input ratio
+    fig2 = plt.figure()
+    ax = fig2.add_subplot(111)
+    ax.plot(map_dict['Rinput_ratio']);
+    ax.xaxis.label.set_color('white')
+    ax.yaxis.label.set_color('white')
+    fig2.suptitle('Rinput_ratio',color = 'white')
+    return map_dict    
+
+def analyzeSCRACMmap(numMaps,save=False): 
+    """
+    Functioned used to import, average, clean, and store data from a single sCRACM experiment (one cell).
+    Remember, when saving the analysis.csv files, be sure that your naming convention matches the CellID in 
+    your database, as these files need to be callable for future analysis. Store all analysis files in single directory! 
+    """
+    map_dict =averageMaps(numMaps)
+
+    rows,numTraces = map_dict['averageMap'].shape
+    sr = map_dict['samplingRate']
+    responsOnsetEnd = 1501 #changed from 1250, some distance response may be that slow (YC, LSPS)
+    baselineStartIndex = 901 #IG: changed from 950 to 900 to increase baseline, same as BJC. #IG (note, changed in python indexing))
+    baselineEndIndex = 1001
+    stimOnInd = 1001
+    synEndInd = 1751 #integrate responses 75ms after stim
+    chargeEndInd = 1751
+    baselineMedians = np.median(map_dict['averageMap'][baselineStartIndex:baselineEndIndex,:],axis=0)
+    baselineSDs = np.std(map_dict['averageMap'][baselineStartIndex:baselineEndIndex,:],axis=0)
+    SD = np.mean(baselineSDs)
+    print(f'Baseline SD: {SD} ')
+
+    #Thresholds, these are vectors remember 
+    dirLevel = 6 #note, 15 has also been used when analyzing sCRACM data, see BJC's BCS
+    dirNegThresh = np.reshape(baselineMedians - dirLevel*SD, (1,numTraces))
+    meanThresh = np.mean(dirNegThresh)
+    print(f'Average response threshold is {meanThresh}')
+    threshold = np.repeat(dirNegThresh,rows,axis=0)
+    responseCounter = 0
+    noResponseCounter = 0
+    avgTraceArr = map_dict['averageMap'] #copy of map matrix, should have size [rows,cols]
+
+    #preallocate variables
+    r,c = map_dict['pattern'][0].shape
+    integral = np.empty((1,numTraces))
+    minimum = np.empty((1,numTraces))
+    minOnset = np.empty((1,numTraces))
+    onset = np.empty((1,numTraces))
+    onset90 = np.empty((1,numTraces))
+    onset10 = np.empty((1,numTraces))
+    riseTime1090 = np.empty((1,numTraces))
+    traceMean = np.empty((1,numTraces))
+    mapOnset = np.empty((r,c))
+    mapMinOnset = np.empty((r,c))
+    mapMin = np.empty((r,c))
+    mapMean = np.empty((r,c))
+    mapIntegral = np.empty((r,c))
+
+    #note: average maps are different between Matlab and Python: difference is 
+    # small, rounding point error? present in the averaging somewhere. Look into it later 
+    for i in range(numTraces):
+        integral[:,i] = np.trapz(map_dict['averageMap'][stimOnInd:chargeEndInd,i])/sr
+        logical = map_dict['averageMap'][stimOnInd:responsOnsetEnd,i]<threshold[stimOnInd:responsOnsetEnd,i]
+        # logical is vector of 1,0, 1 when comparison holds true 
+        if not any(logical): #when logical is all false (aka, no response for that trace), this statement returns True
+            noResponseCounter = noResponseCounter +1
+            onset[:,i] = float('nan')
+            minimum[:,i]=float('nan')
+            minOnset[:,i]=float('nan')
+            onset90[:,i]=float('nan')
+            onset10[:,i]=float('nan')
+            riseTime1090[:,i]=float('nan')
+            traceMean[:,i]=0
+        else:
+            responseCounter = responseCounter+1
+            onset[:,i] = np.argmax(logical>0)/sr #find indecies where value exceeds 0 (first true), divide by sample rate 
+            #find min and min index for trace 
+            Minimum,MinOnset = np.min(map_dict['averageMap'][stimOnInd:synEndInd,i]), np.argmin(map_dict['averageMap'][stimOnInd:synEndInd,i])
+            # need try, except statments for onset 90 and 10. Not worrying about this right now
+            #
+            #
+            #
+            #
+            #
+
+            minimum[:,i] = Minimum
+            minOnset[:,i] = MinOnset/sr
+            traceMean[:,i] = np.mean(map_dict['averageMap'][stimOnInd:synEndInd,i])
+
+        #put values in the position of LSPS/sCRACM map
+        a,b = np.nonzero(map_dict['standardPattern']==i+1)
+        mapOnset[a[0],b[0]] = onset[:,i] 
+        mapMinOnset[a[0],b[0]] = minOnset[:,i]
+        mapMin[a[0],b[0]] = minimum[:,i]
+        mapMean[a[0],b[0]] = traceMean[:,i]
+        mapIntegral[a[0],b[0]] = integral[:,i]
+
+    print(f'{responseCounter} sites have response, {noResponseCounter} sites do not')
+
+    # transform soma location from coordinates saved from image capture to relative postion on map
+    #check to catch for empty soma designation 
+    if np.size(map_dict['soma1Coordinates'])>0: #if you forgot to mark soma, then size will be 0
+        print('soma coords designated online')
+    else:
+        print('Soma position was not selected during experiment, please enter manual points and fix post-hoc')
+        x=input("Enter temporary soma X coord (if unsure use 0)")
+        y=input('Enter temporary soma y coord (if unsure use 0)')
+        map_dict['soma1Coordinates'] = [int(x),int(y)]
+    newX,newY= somaPositionTransformer(map_dict['soma1Coordinates'][0],map_dict['soma1Coordinates'][1],map_dict['spatialRotation'],map_dict['xPatternOffset'],map_dict['yPatternOffset'])
+    newSomaCoords = [newX,newY]
+    #save data to new_dict: 
+    class NewClass(object): pass
+    map_analysis_dict = NewClass()
+    
+    map_analysis_dict.experimentNumber = map_dict['experimentNumber']
+    map_analysis_dict.amplifierNumber = map_dict['ampNumber']
+    map_analysis_dict.negativeControl = float('nan')
+    #map_analysis_dict.soma1Coordinates = map_dict['soma1Coordinates']
+    map_analysis_dict.soma1Coordinates = newSomaCoords
+    map_analysis_dict.horizontalVideoDistance = map_dict['horizontalVideoDistance']
+    map_analysis_dict.verticalVideoDistance = map_dict['verticalVideoDistance']
+    map_analysis_dict.distanceToPia = float('nan') #user defined after measuring
+    map_analysis_dict.cortexThickness = float('nan') #user defined after measuring 
+    map_analysis_dict.layer1Row = float('nan') #user defined after measuring 
+    map_analysis_dict.laserPower = map_dict['laserPower']
+    map_analysis_dict.pulseWidth = float('nan') #not applicable for now
+    map_analysis_dict.xSpacing = 50
+    map_analysis_dict.ySpacing = 50
+    map_analysis_dict.numberOfMaps = numMaps
+    map_analysis_dict.onset = mapOnset
+    map_analysis_dict.minOnset = mapMinOnset
+    map_analysis_dict.minimum = mapMin
+    map_analysis_dict.mean = mapMean
+    map_analysis_dict.integral = mapIntegral
+    
+    map_analysis_dict = map_analysis_dict.__dict__
+    
+   # plot out maps 
+    analysisPlots(map_analysis_dict,map_analysis_dict['amplifierNumber'])
+    
+    # meausure soma depth and cortical thickness.  
+    previous_point = None
+    measure_points()
+    
+    # save data in .csv file. Be consistent about naming! Should be: CEllID_analysis.csv
+    if save ==True: 
+        root_dir = '/Users/iangingerich/Desktop/sCRACM_analysis/sample_data/' #hard coded for now: change to proper root dir! 
+        fileName=input("File name (include file extension ie .csv): ")
+        pathToSave = root_dir+fileName
+        field_names=map_analysis_dict.keys() #variable names 
+        with open(pathToSave,'w') as csvfile:
+            writer = csv.DictWriter(csvfile,fieldnames = field_names)
+            writer.writeheader()
+            writer.writerows([map_analysis_dict])
+    return map_analysis_dict
+
 
 def load_sCRACMdatabase():
     """"
@@ -61,7 +677,7 @@ def annotate_layers(df):
     """
     df['ratio_thickness'] = df['piadistance']/df['cortical thickness']  #find the normalized cortical depth of the soma. #soma depth and cortical thickness are defined during data processing 
     labels = ['L1','L2','L3','L5','L6','Claustrum'] #label. Note, this is for the agranular insula (AI), where L4 is absent 
-    bins = [0,,0.13,0.25,0.43,0.68,0.87,1] #normalized thickness bins are for AI only, based on 3 nissl brain layer annotations. 
+    bins = [0,0.13,0.25,0.43,0.68,0.87,1] #normalized thickness bins are for AI only, based on 3 nissl brain layer annotations. 
     #note: layer annotations are variable depending on dorsal/ventral axis. For more acurate layer identities, map cells to insular flatmap first, and query thickness based on coordinates! 
 
     df['layer_bin']= pd.cut(df['ratio_thickness'],bins=bins,labels = labels) #annotate the df using the labels and bins variables 
@@ -127,13 +743,11 @@ def mapAverage(mapStack):
 # note: this above function could be imporved. Intead of looping, just use a vectorized approach such as: np.mean(mapStack, axis = 0). Taking the mean of the first axis 
 
 
-
 def get_cells_to_average(input_source, layer,
                          by_layer_bin = True,
                          by_layer_online = False, 
                          by_Mtype = False,
                          bead_positive = False):
-    
     """
     Helper function: contructs file paths for cells to be analyzed.
     
@@ -156,14 +770,14 @@ def get_cells_to_average(input_source, layer,
         printout = 'by_layer_bin'
         cells_to_average_df = sCRACMdf[(sCRACMdf['InjectionSite']==input_source) & (sCRACMdf['MapForAnalysis']==True) & (sCRACMdf['Response']==True)
                                    &(sCRACMdf['layer_bin']== layer)]# & sCRACMdf['Bead Positive?']== bead_positive] 
-        cell_IDs = analysis_path + cells_to_average_df['CellID'] + '_analysis.m' #append together file names to load 
+        cell_IDs = analysis_path + cells_to_average_df['CellID'] + '_analysis.csv' #append together file names to load 
 
         #Nested IF statments: by layer bin first, and then add additional filters
         # average based on cellular M_type 
         if by_Mtype != False: #if by_Mtype is something other than false (default), then filter df my m_type as well. 
             printout = 'by_Mtype: '+str(by_Mtype)
             cells_to_average_df = cells_to_average_df[(cells_to_average_df['M_type_final']== by_Mtype)] #filter based on newest M_type assignments 
-            cell_IDs = analysis_path + cells_to_average_df['CellID'] + '_analysis.m'
+            cell_IDs = analysis_path + cells_to_average_df['CellID'] + '_analysis.csv'
 
 
       # if you want to get the file names of bead positive cells, bead positve= True during input
@@ -172,13 +786,13 @@ def get_cells_to_average(input_source, layer,
             printout = 'bead_positive'
             cells_to_average_df = cells_to_average_df[(cells_to_average_df['Injection Type']=='virus+bead')& (cells_to_average_df['Bead Positive?']== True)]
 
-            cell_IDs = analysis_path + cells_to_average_df['CellID'] + '_analysis.m'
+            cell_IDs = analysis_path + cells_to_average_df['CellID'] + '_analysis.csv'
             
         elif bead_positive == 'negative_control': #note: right now this only works for cells that have a negative control designated in their .m file. For full python code, the inport settings 
             # also needs to have a negative control variable to filtering 
             printout = 'negative_control'
             cells_to_average_df = cells_to_average_df[(cells_to_average_df['Injection Type']=='virus+bead')& (cells_to_average_df['Bead Positive?']== False)]
-            cell_IDs = analysis_path + cells_to_average_df['CellID'] + '_analysis.m'
+            cell_IDs = analysis_path + cells_to_average_df['CellID'] + '_analysis.csv'
             
     
 
@@ -187,14 +801,14 @@ def get_cells_to_average(input_source, layer,
         printout = 'by_layer_online'
         cells_to_average_df = sCRACMdf[(sCRACMdf['InjectionSite']==input_source) & (sCRACMdf['MapForAnalysis']==True) & (sCRACMdf['Response']==True)
                                    &(sCRACMdf['Layer estimation']== layer)]#& sCRACMdf['Bead Positive?']==bead_positive] #filter based on mapfor analysis and input source
-        cell_IDs = analysis_path + cells_to_average_df['CellID'] + '_analysis.m'
+        cell_IDs = analysis_path + cells_to_average_df['CellID'] + '_analysis.csv'
     
         #nested IF statement: by online layer designation first, and then other filters!
         # average based on cellular M_type 
         if by_Mtype != False:
             printout = 'by_Mtype: '+str(by_Mtype)
             cells_to_average_df = cells_to_average_df[(cells_to_average_df['M_type_final']== by_Mtype)] #filter based on mapfor analysis and input source
-            cell_IDs = analysis_path + cells_to_average_df['CellID'] + '_analysis.m'
+            cell_IDs = analysis_path + cells_to_average_df['CellID'] + '_analysis.csv'
 
 
         
@@ -202,12 +816,12 @@ def get_cells_to_average(input_source, layer,
             printout = 'bead_positive'
             cells_to_average_df = cells_to_average_df[(cells_to_average_df['Injection Type']=='virus+bead')& (cells_to_average_df['Bead Positive?']== True)]
 
-            cell_IDs = analysis_path + cells_to_average_df['CellID'] + '_analysis.m'
+            cell_IDs = analysis_path + cells_to_average_df['CellID'] + '_analysis.csv'
             
         elif bead_positive == 'negative_control':
             printout = 'negative_control'
             cells_to_average_df = cells_to_average_df[(cells_to_average_df['Injection Type']=='virus+bead')& (cells_to_average_df['Bead Positive?']== False)]
-            cell_IDs = analysis_path + cells_to_average_df['CellID'] + '_analysis.m'
+            cell_IDs = analysis_path + cells_to_average_df['CellID'] + '_analysis.csv'
     
     #must select some kind of averaging method here! 
     else: 
@@ -223,8 +837,6 @@ def average_map_stack(input_source, layer,
                          by_layer_online = False, 
                          by_Mtype = False,
                          bead_positive = False):
-
-    
     """
     apapted from Petreanu et al., 2009: https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2745650/
     Loads cellular data into Python dicts (one per cell), extracts map and soma data, returns 
@@ -265,7 +877,7 @@ def average_map_stack(input_source, layer,
         XY[i] = cellA['soma1Coordinates'] #save coordinates 
         [a,b] = cellA_mean.shape
         trueRowNumber = cellA_mean.shape[0]
-        layer1Row[0,i] = cellA['layer1Row']
+        layer1Row[0,i] = cellA['layer1Row'][0]
         # add zeros to cells that are less that 24 rows! 
         if cellA_mean.shape[0] < max_row_n:
                 add_arr = np.zeros(((24-cellA_mean.shape[0]),b)) #number of rows of zeros to add, note, change ending from 12 to 1, as we are adding after collapsing
@@ -288,7 +900,7 @@ def average_map_stack(input_source, layer,
                 average_map_new = placeHolderMatrix
         #end if/else statement 
         #remove responses outside of tissue here 
-        average_map_new[0:int((cellA['layer1Row'])-1),:] = 0 
+        average_map_new[0:int((cellA['layer1Row'][0])-1),:] = 0 
         mapSpacing = cellA['xSpacing'] #assumes dx and dy are the same, which they are, both 50.  
         #next step normalizes maps to min value 
         minVal = np.min(average_map_new) #find min for each map
@@ -320,6 +932,7 @@ def average_map_stack(input_source, layer,
 
 ########## average sCRACM maps here, will call above helper function to average based on a specfic parameter! ###############
 
+# fixed to pull .csv analysis files instead of .m files 
 def average_map(input_source, layer,
                          by_layer_bin = True,
                          by_layer_online = False, 
@@ -366,12 +979,18 @@ def average_map(input_source, layer,
     # start for loop to load in cells now 
     for i,n in enumerate(cell_IDs):
         #load cells 
-        cellA = m2p.mstruct2pydict(n) #use Mike's parcer to take .m files that have already been processed 
-        cellA_mean = cellA['mean'] #define the map 
-        XY[i] = cellA['soma1Coordinates'] #save coordinates 
+        cellA =pd.read_csv(n) # read individual cell into df with nested cells 
+        #format map data correctly 
+        cellA_mean = np.fromstring(cellA['mean'].values[0].replace('\n','').replace('] [','\n').replace('[[','').replace(']]',''),sep=' ') # parse map array into correct datatype
+        cols = 12 #hard code number of columns for now 
+        rows = int(cellA_mean[0]/cols) #number of rows for the map 
+        cellA_mean = np.reshape(cellA_mean,(rows,cols)) #reshape map to be (row,cols)
+        #get soma coords in correct formate 
+        soma1Coords=np.fromstring(cellA['soma1Coordinates'][0].replace('[','').replace(']',''),sep = ',')
+        XY[i] = soma1Coords #save soma coordinates  
         [a,b] = cellA_mean.shape
         trueRowNumber = cellA_mean.shape[0]
-        layer1Row[0,i] = cellA['layer1Row']
+        layer1Row[0,i] = cellA['layer1Row'][0]
         # add zeros to cells that are less that 24 rows! 
         if cellA_mean.shape[0] < max_row_n:
                 add_arr = np.zeros(((24-cellA_mean.shape[0]),b)) #number of rows of zeros to add, note, change ending from 12 to 1, as we are adding after collapsing
@@ -394,7 +1013,7 @@ def average_map(input_source, layer,
                 average_map_new = placeHolderMatrix    
         #end if/else statement 
         #remove responses outside of tissue here 
-        average_map_new[0:int((cellA['layer1Row'])-1),:] = 0 
+        average_map_new[0:int((cellA['layer1Row'][0])-1),:] = 0 
         #note: in original code, the mapSpacing variable is designated (n), need to save somewhere else? 
         mapSpacing = cellA['xSpacing'] #assumes dx and dy are the same, which they are, both 50.  
         #next step normalizes maps to min value 
@@ -620,8 +1239,9 @@ def collapse_map(input_source):
    # Read in sCRACM database. Make sure it is up to date! 
     sCRACMdf = load_sCRACMdatabase() 
     contraidf = sCRACMdf[(sCRACMdf['InjectionSite']==input_source) & (sCRACMdf['MapForAnalysis']==True) & sCRACMdf['Response']==True]
-    #Build analysis files to load from analyzed cells folder 
-    IDs = analysis_path + contraidf['CellID'] + '_analysis.m'
+    #Build analysis files to load from analyzed cells folder
+    #note: make sure analysis_path is set in the ini file, so the path is correct!  
+    IDs = analysis_path + contraidf['CellID'] + '_analysis.csv' #should be reading in the analysis.csv files 
     cell_ID = contraidf['CellID']
     # convert cell IDs from DF to np.array to use for labels in the figure
     cell_ID_array = cell_ID.to_numpy()[...,None] 
@@ -631,9 +1251,16 @@ def collapse_map(input_source):
     soma_y_arr = []
     trueRowNumber_arr = []
     # change back to IDs to get full list of paths to files! 
-    for n in tqdm(IDs): 
-        loaded_cell = m2p.mstruct2pydict(n) #note: n is the path name, so passing it n will result in the .m file being read. 
-        average_map = loaded_cell['mean'] #take just the average and soma coordinates!
+    for n in IDs: 
+        loaded_cell = pd.read_csv(n) #note: n is the path name, so passing it n will result in the file being read. 
+        # parse map array into correct datatype
+        average_map = np.fromstring(loaded_cell['mean'].values[0].replace('\n','').replace('] [','\n').replace('[[','').replace(']]',''),sep=' ') 
+        #DANGER: cols variable is hard coded, if averaging larger maps, this need to be flexible! 
+        cols = 12 #hard code number of columns for now 
+        rows = int(average_map[0]/cols) #number of rows for the map 
+        average_map = np.reshape(average_map,(rows,cols)) #reshape map to be (row,cols)
+        # get soma coordinates and parse into correct format
+        soma1Coords=np.fromstring(loaded_cell['soma1Coordinates'][0].replace('[','').replace(']',''),sep = ',')
         [a,b] = average_map.shape
         trueRowNumber = average_map.shape[0]
         trueRowNumber_arr = [trueRowNumber_arr,trueRowNumber]
@@ -643,12 +1270,12 @@ def collapse_map(input_source):
             average_map_new = np.concatenate((average_map,add_arr),axis = 0) # add rows of zeros here
             shift_unit = max_row_n - trueRowNumber
             shift_val = (shift_unit*0.5)*50 # value to subtract from Y coordinate 
-            soma_Y = (-1*(loaded_cell['soma1Coordinates'][1]))-shift_val #transformed Y-coordinate to plot on top of the heatmap
+            soma_Y = (-1*soma1Coords[1])-shift_val #transformed Y-coordinate to plot on top of the heatmap
         else: 
-            soma_Y = (-1*(loaded_cell['soma1Coordinates'][1])) 
+            soma_Y = (-1*soma1Coords[1]) 
             average_map_new = average_map
-        layer1Row = loaded_cell['layer1Row']
-        average_map_new[0:int((loaded_cell['layer1Row'])-1),:] = 0 #remove data over Pia by setting sites to 0, note, instead of 3 it should be the layer 1 number in the original dictinary, minus 1! 
+        layer1Row = loaded_cell['layer1Row'][0]
+        average_map_new[0:int((loaded_cell['layer1Row'][0])-1),:] = 0 #remove data over Pia by setting sites to 0, note, instead of 3 it should be the layer 1 number in the original dictinary, minus 1! 
         collapse_map = np.sum(average_map_new,axis = 1)[...,None] #last bit here is transposing 1D sum array into column. Rework code so collapse happens before adding zeros so larger maps can be averaged! 
         soma_y_arr = np.append(soma_y_arr,soma_Y) # read in soma coordinates after each round        
         collapsed_arr = np.concatenate((collapsed_arr,collapse_map), axis=1)
@@ -704,7 +1331,7 @@ def collapse_map(input_source):
 
 
 #note: for bead comparison code: need to fix dataframe slicing: Use explicit indexing! 
-
+#updated so function works by calling analysis.csv files instead of .m files. 
 def bead_comparison(input_source,save = False):
     
     """
@@ -720,10 +1347,24 @@ def bead_comparison(input_source,save = False):
     annotate_layers(bead_df) #annotate layer identities for each cell. 
 
 
-    #get total integration for bead postive and bead negative 
-    ids = analysis_path + bead_df['CellID'] + '_analysis.m'
-    bead_df['bead_positive'] = [np.sum(m2p.mstruct2pydict(n)['mean']) for n in ids]
-    bead_df['bead_negative']= [np.sum(m2p.mstruct2pydict((analysis_path + m2p.mstruct2pydict(n)['negativeControl'] + '_analysis.m'))['mean']) for n in ids]
+    #get total integration for bead postive and bead 
+    #note: need to change analysis_path to be set in the ini file, as a global!  
+    ids = analysis_path + bead_df['CellID'] + '_analysis.csv'
+    #take sum of the map
+    #take sum of the bead negative control cell's map as well 
+    #and add the value to the bead df 
+    mapSum = []
+    mapSumControl = []
+    for n in ids:
+        loaded_cell = pd.read_csv(n)
+        mapSum.append(np.sum(np.fromstring(loadedCell['mean'].values[0].replace('\n','').replace('] [','\n').replace('[[','').replace(']]',''),sep=' ')))
+        negID = analysis_path+str(loaded_cell['negativeControl'][0])+'_analysis.csv'
+        mapSumControl.append(np.sum(np.fromstring(loadedControl['mean'].values[0].replace('\n','').replace('] [','\n').replace('[[','').replace(']]',''),sep=' ')))
+    bead_df['bead_positive'] = mapSum
+    bead_df['bead_negative']
+    
+
+
 
     #slice by input source and normalize to negative control cell
     #reshape dataframe for seaborn plotting 
