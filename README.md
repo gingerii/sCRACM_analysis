@@ -20,8 +20,9 @@ cleanData.analyzeSCRACMmap(numOfMaps,saveFlag=True)
 anaylzeSCRACMMap takes 2 arguments, the number of maps you want to average, and an optional save flag (default = False). This command will open a file dialogue box for the user to select the XSG files that are to be averaged, as well as a .tif image taken during the experiment for soma depth and cortical thickness measurements. When the .tif image is opened measure soma depth of the cell, and cortical thickness of the slice for the column where the soma is present. Measurements are converted to microns and displayed after each click. To close the .tif image, press any key. 
 Example: 
 ![My_Image](example_images/measure.png)
+
 Map grid overlay:
-![My_Image](example_images/Grid_overlay.eps)
+![My_Image](example_images/grid.png)
 
 The function will output summary information for the cell, as well as analysis plots for quality control. If the save flag is True, the user will be prompted to enter a filename for the analysis, and a .csv file with the processed data will be stored in the path_ephys_data directory. Name all files with the CellID_analysis.csv convention! 
 **Important:** Once file is saved, open, and enter the measured values for soma depth and cortical thickness. If your mapping grid was aligned with stimulation points not covering the tissue, add a layer1Row value as well! 

@@ -12,6 +12,7 @@ Helpers:
     - analysisPlots: plots sCRACM maps (mean, min, onset, charge) for a single cell 
     - mousePoints: called by measure_points, stores left mouse click coordinates when clicking on .tif image. Measures real world distance between points 
     - measure_points: driver function for mousePoints, used to measure distance between microscope .tif image (4x LSPS rig calibration only)
+    - plotMappingArray: plots mapping array over acute slice image. Used to determine layer1Row. 
     - loadXSG: helper function called by averageMaps, takes amplifer number. Will open a matlab XSG file from a single mapping sweep, and saves salient data in python dictionary.
     - averageMaps: helper function used to average multiple sweeps from a single experiment into one map.
 Execution functions: 
@@ -33,6 +34,7 @@ from tkinter import Tk
 import cv2
 import csv
 from sCRACM_analysis.sCRACM_global import path_database,filename_cell_db,path_ephys_data
+
 
 def _check_keys( dict):
     """
@@ -146,7 +148,8 @@ def analysisPlots(map_dict,ampNum):
     for n in range(np.shape(to_plot)[0]):
         img = ax[n].imshow(to_plot[n],aspect =
                       'auto', cmap = 'magma_r',extent = [xmin,xmax,ymax,ymin]);
-        img.axes.tick_params(color = 'white',labelcolor = 'white')
+        img.axes.tick_params(axis = 'both',which = 'both',bottom=False,top=False,labelbottom=False,labelleft=False)
+        #img.axes.tick_params(axis = 'y',which = 'both',left=False,right=False,labelright=False)
         ax[n].plot(somax,somay,'^',markersize=10, color='b');
         cbaxes = inset_axes(ax[n],width = "3%", height = "75%",loc = 'lower right')
         color_bar = plt.colorbar(img,cax=cbaxes);
@@ -198,6 +201,52 @@ def measure_points():
     cv2.waitKey(0)
     cv2.destroyAllWindows()
     cv2.waitKey(1);
+    return img_path
+
+
+def plotMappingArray(img_path,map_analysis_dict):
+    """
+    Will plot mapping array over acute slice image. Use to determine layer1Row number! 
+    """
+    
+    im = plt.imread(img_path)
+    R = im/(np.max(im[:])/110)
+   # variables coded from the workspace variable: 
+    XRange =map_analysis_dict['horizontalVideoDistance']
+    YRange = map_analysis_dict['verticalVideoDistance']
+    xSpacing = map_analysis_dict['xSpacing']
+    ySpacing = map_analysis_dict['ySpacing']
+    theta = map_analysis_dict['spatialRotation']
+    pattern = map_analysis_dict['pattern'][0]
+    xPatternOffset = map_analysis_dict['xPatternOffset'] #check the affind tranform lines 
+    yPatternOffset = map_analysis_dict['yPatternOffset']
+    rotation = (theta/180*np.pi) #for rotating the tracing (user rotation plus experiment rotation)
+    
+    #initilize figure 
+    fig = plt.figure(figsize = (10,10))
+    ax = fig.add_subplot(111)
+    extent = (-.5*XRange,.5*XRange, -.5*YRange,.5*YRange)
+    #plot acture slice image 
+    im = plt.imshow(R, extent = extent,cmap = 'gray'); #extent key argument most similar to Xdata and Ydata
+    ax.set_title(map_analysis_dict['experimentNumber'], color = 'w');
+    ax.set_aspect(1)
+    ax.set_xlim([-XRange/2,XRange/2])
+    ax.set_ylim([-YRange/2,YRange/2])
+
+    #create coordinats for map array from map pattern size! 
+    arrayX= np.arange(pattern.shape[1])*xSpacing - 0.5 * (pattern.shape[1]-1)*xSpacing #create 1 row of x cords 
+    xorig= np.reshape(np.tile(arrayX,(pattern.shape[0],1)),(pattern.size),order='F') #repeat coords for all rows, and reshape into 1D array, need fortran like indexing for ordered coords
+    arrayY= np.arange(pattern.shape[0])*ySpacing - 0.5 * (pattern.shape[0]-1)*ySpacing
+    yorig= np.reshape(np.tile(arrayY,(pattern.shape[1],1)),(pattern.size)) #don't need fortran like indexing here! 
+
+    #preform rotation
+    [rho,theta2] = cart2pol(xorig,yorig)
+    [xpoints,ypoints] = pol2cart(rho,theta2)
+    xpoints = xpoints+xPatternOffset
+    ypoints = ypoints+yPatternOffset
+    #plot mapping array 
+    ax.plot(xpoints,ypoints,'o',markersize = 4);
+    plt.axis('off')
 
 def loadXSG(ampNumber):
     """ This helper function is called by averageMaps() and takes the amplifier number from an experiment, 
@@ -590,6 +639,10 @@ def analyzeSCRACMmap(numMaps,save=False):
     map_analysis_dict.xSpacing = 50
     map_analysis_dict.ySpacing = 50
     map_analysis_dict.numberOfMaps = numMaps
+    map_analysis_dict.xPatternOffset = map_dict['xPatternOffset']
+    map_analysis_dict.yPatternOffset = map_dict['yPatternOffset']
+    map_analysis_dict.spatialRotation = map_dict['spatialRotation']
+    map_analysis_dict.pattern = map_dict['pattern']
     map_analysis_dict.onset = mapOnset
     map_analysis_dict.minOnset = mapMinOnset
     map_analysis_dict.minimum = mapMin
@@ -603,7 +656,8 @@ def analyzeSCRACMmap(numMaps,save=False):
     
     # meausure soma depth and cortical thickness.  
     previous_point = None
-    measure_points()
+    img_path=measure_points()
+    plotMappingArray(img_path,map_analysis_dict)
     
     # save data in .csv file. Be consistent about naming! Should be: CEllID_analysis.csv
     if save ==True: 
