@@ -33,9 +33,12 @@ Example output plots:
 ## Example 2: Visualize processed data 
 The analyzeData module contins multiple functions for screening cellular input maps, averaging maps based on catagorical groupings, and other useful plotting functions.
 Map averaging: 
+
 ![My_Image](example_images/average.png)
+
 Collapse all maps of a group: 
 ![My_Image](example_images/collapse.png)
+
 Page through all maps of a group:
 ![My_Image](example_images/page.png)
 
