@@ -1,0 +1,12 @@
+README.md
+setup.py
+sCRACM_analysis/__init__.py
+sCRACM_analysis/mat2py.py
+sCRACM_analysis/sCRACM_global.py
+sCRACM_analysis.egg-info/PKG-INFO
+sCRACM_analysis.egg-info/SOURCES.txt
+sCRACM_analysis.egg-info/dependency_links.txt
+sCRACM_analysis.egg-info/requires.txt
+sCRACM_analysis.egg-info/top_level.txt
+sCRACM_analysis/analysis/__init__.py
+sCRACM_analysis/analysis/analyzeSCRACM.py

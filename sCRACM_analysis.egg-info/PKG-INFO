@@ -1,0 +1,15 @@
+Metadata-Version: 2.1
+Name: sCRACM-analysis
+Version: 0.1.1
+Summary: Package for importing, wrangling, analyzing, and visualization of brain cell data (optogenetic mapping data). in development
+Home-page: https://github.com/gingerii/sCRACM_analysis
+Author: Ian Gingerich
+Author-email: gingerichik@gmail.com
+License: UNKNOWN
+Description: # sCRACM_analysis
+        
+Platform: UNKNOWN
+Classifier: Programming Language :: Python :: 3
+Classifier: Operating System :: OS Independent
+Classifier: Liscense::OSI Approved::MIT Liscense
+Description-Content-Type: text/markdown
