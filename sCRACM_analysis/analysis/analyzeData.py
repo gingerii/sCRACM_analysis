@@ -3,8 +3,7 @@ Averaging and plotting of cleaned sCRACM data.
 
 Functions: 
 Helpers:
-    - cart2pol: cartesian to polar coordinate transformer 
-    - pol2cart: polar to cartesian coordinate transformer 
+    - forwardAffineTransform: preform affine transform on column-shaped vectors 
     - checkMetaData: checks that manual annotations are present in .csv analysis files once loaded.
     - somaPositionTransformer: takes raw soma coordinates from sCRACM map (designated during experiment) and applies rotation and pattern offset 
     - analysisPlots: plots sCRACM maps (mean, min, onset, charge) for a single cell 
@@ -28,6 +27,8 @@ Execution/plotting functions:
     heatmaps of each cell, arranged from superfical to deep layer cells 
     - bead_comparison: plots paired charts showing total integration of bead positive cells 
     against negative controls per input source, per layer. Returns ttest stats for each layer
+    - plotSWC: Will plot annotations and traced cell from an SWC file. 
+    - overlaySWC: Overlays sCRACM map with SWC tracing and .tif actute slice image 
 
 Citations and such: 
 Much of the sCRACM map averaing has been adapted, with permission, from Petreanu et al., 2009: https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2745650/  (original code writen in Matlab)
@@ -49,7 +50,31 @@ from tkinter import filedialog
 from tkinter import Tk
 import csv
 from sCRACM_analysis.sCRACM_global import path_database,filename_cell_db,path_ephys_data
+from sCRACM_analysis.analysis.cleanData import cart2pol,pol2cart
 
+
+
+def forwardAffineTransform(T,v1,v2):
+    """
+    Preform an affine tranformation of column shaped vectors. 
+    """
+    if v1.shape[1] != 1 or v2.shape[1] != 1:
+        print('Vectors must be column-shaped!')
+        return
+    elif v1.shape[0] != v2.shape[0]:
+        print('Vectors must be of equal length!')
+        return
+
+    vecSize = v1.shape[0]
+
+    concVec = np.concatenate((v1,v2),axis=1)
+    onesVec = np.ones((vecSize,1))
+
+    U = np.concatenate((concVec,onesVec),axis=1)
+
+    retMat = np.dot(U,T[:,0:2])
+
+    return (retMat[:,0].reshape((vecSize,1)), retMat[:,1].reshape((vecSize,1)))
 
 
 def checkMetaData(cell):
@@ -840,3 +865,235 @@ def bead_comparison(input_source,save = False):
     if save == True:
         g.savefig('/Users/iangingerich/Desktop/Poster_materials/bead_comparison_by_layer'+'_'+input_source+'.pdf',format = 'pdf',dpi = 300)
     return stat
+
+
+def plotSWC(axis=False,
+        flip=False,
+        spatial_rotation = 0,
+        input_rotation = 0, 
+        shrinkX = 1,
+        shrinkY = 1,
+        tweekSomaX = 0,
+        tweekSomaY = 0,
+        soma1Coordinates = [0,0],
+        file_path = False):  
+    """
+    Plots swc file, used to check if tracing needs to be flipped 
+    over x-axis before overlaying with .tif image and sCRACM heatmap.
+    """
+    
+    if file_path == False:
+        print('Please select traced neuron SWC file')
+        Tk().withdraw()
+        file_path = filedialog.askopenfilename()
+    #read file 
+    file_data = np.loadtxt(file_path)
+    #make all dendrites have same annotation! 
+    logic = file_data[:,1] ==4
+    file_data[logic,1] = 3
+    array = file_data
+    if flip ==True:
+        #this line will flip over the x-axis: 
+        array[:,2] = array[:,2]*-1
+    if axis == False: 
+        fig = plt.figure()
+        axis = fig.add_subplot(111)
+    axis.set_facecolor('black')
+
+    #total rotation should be your tweek factor, plus the spatialRotation stored in the cell's
+    #.csv analysis file. Default is no rotation. 
+    rotation = input_rotation + (spatial_rotation/180*np.pi)
+    #using above functions: 
+    [rho,theta]=cart2pol(array[:,2], array[:,3])
+    #apply rotation, and convert back 
+    [newX,newY]=pol2cart(rho,theta+rotation)
+    #assign rotation adjusted coordinates back to swc array
+    array[:,2] = newX
+    array[:,3]= newY
+
+    # find center of mass 
+    contourArray = []
+    [r,c] = np.shape(array)
+    A = np.arange(r) #range to iterate over (rows)
+    # find where there is a soma annotation, pull out the x,y,z coordinates, and average
+    arraySoma=array[array[:,1] == 1,:] #subset data using indexing instead of for loop (faster)
+    somaX = arraySoma[:,2]
+    somaY=arraySoma[:,3]
+    #find center 
+    centerX = np.mean(somaX)
+    centerY = np.mean(somaY)
+    # apply shrinkage 
+    array[:,2] = array[:,2]/shrinkX
+    array[:,3] = array[:,3]/shrinkY
+    # center soma position respect to the map
+    array[:,2] = array[:,2] - centerX + soma1Coordinates[0] + tweekSomaX 
+    array[:,3] = array[:,3] - centerY + soma1Coordinates[1] + tweekSomaY 
+   #plotting  
+    contourArray = []
+    for n in A:
+        if array[n,1] == 1: #ie, its a soma
+            somaX[n] = array[n,2]
+            somaY[n] = array[n,3]
+        elif array[n,1] ==2 or array[n,1] == 3:
+            parent = int(array[n,6])
+            if parent != -1: 
+                x1 = array[parent-1,2]
+                y1 = array[parent-1,3]
+                x2 = array[n,2]
+                y2 = array[n,3]
+                hline, = axis.plot([x1,x2],[y1,y2],color = 'w')
+                if array[n,1] == 2:
+                    hline.set_color('w') # for coloring axon red
+                elif array[n,1] == 3: 
+                    hline.set_color('w')
+        elif array[n,1] > 3: # its some contour
+            contourArray.append([array[n,1],array[n,2],array[n,3],array[n,4]])
+    contourArray = np.array(contourArray) # convert from list to np.array 
+    [r,c] = np.shape(contourArray)  
+    if r ==0 or c == 0: 
+        print('no contours annotated')# must not be any contours, skip to next part 
+    else: 
+        B = np.unique(contourArray[:,0])
+        for n in B:
+            inds = np.where(contourArray[:,0]==n)
+            #inds = contourArray[:,0].index(n)
+            startRow = np.min(inds)
+            endRow = np.max(inds)
+            Xdata = contourArray[startRow:endRow,1]
+            Ydata = contourArray[startRow:endRow,2]
+            #Zdata = contourArray[startRow:endRow,3]
+            hline, = axis.plot(Xdata,Ydata,color = 'w')
+    return file_path
+
+def overlaySWC(CellID,
+               input_rotation = 0,
+               shrinkX = 1,
+               shrinkY = 1,
+               tweekSomaX = 0,
+               tweekSomaY = 0):
+    
+    print('check orientation of tracing')
+    #plot out the SWC and see if it needs to be flipped 
+    file_path=plotSWC()
+    plt.show()
+    #capture flip after checking plotting 
+    user_input=input('Does the SWC need to be flipped (yes/no)')
+    if user_input.lower()=='yes':
+        print('SWC will be flipped over x-axis')
+        flip = True
+    elif user_input.lower() == 'no':
+        print('SWC is correct as is')
+        flip = False
+        
+    # Picture 
+    print('Please select the acute slice .tif image')
+    Tk().withdraw()
+    picture_path = filedialog.askopenfilename()
+    im = plt.imread(picture_path)
+    R = im/(np.max(im[:])/110)
+    
+    #load analysis .csv file for single cell 
+    cell_path = os.path.join(path_ephys_data,CellID+'_analysis.csv')
+    loaded_cell = pd.read_csv(cell_path)
+    #define some variables 
+    XRange=loaded_cell.horizontalVideoDistance[0]
+    YRange = loaded_cell.verticalVideoDistance[0]
+    mapSpacing = loaded_cell.xSpacing[0]
+    spatialRotation = loaded_cell.spatialRotation[0]
+    xPatternOffset = loaded_cell.xPatternOffset[0]
+    yPatternOffset = loaded_cell.yPatternOffset[0]
+    soma1Coordinates = np.fromstring(loaded_cell.soma1Coordinates[0].replace('[','').replace(']',''),sep = ',')
+    #sCRACM map 
+    M=np.fromstring(loaded_cell['mean'].values[0].replace('\n','').replace('] [','\n').replace('[[','').replace(']]',''),sep=' ') 
+    cols = 12 #hard code number of columns for now 
+    rows = int(M.shape[0]/cols) #number of rows for the map 
+    M = np.reshape(M,(rows,cols)) #reshape map to be (row,cols)
+    
+    #initialize figure 
+    [Ypix,Xpix] = np.shape(R)
+    xVideoScaleFactor = XRange/Xpix
+    yVideoScaleFactor = YRange/Ypix
+
+    %matplotlib inline
+    fig = plt.figure(figsize = (10,10))
+    ax = fig.add_subplot(111)
+
+    extent = (-.5*XRange,.5*XRange, -.5*YRange,.5*YRange)
+    im = plt.imshow(R, extent = extent,cmap = 'gray') #extent key argument most similar to Xdata and Ydata
+    im.axes.tick_params(axis = 'both',which='both',bottom=False,top=False,labelbottom=False,labelleft=False)
+    ax.set_title(loaded_cell['experimentNumber'][0], color = 'w');
+    ax.set_aspect(1)
+    ax.set_xlim([-XRange/2,XRange/2])
+    ax.set_ylim([-YRange/2,YRange/2])
+
+    ############################# MAP ##########################################
+    #get averaged map
+    #M = test_cell['mean']
+    [yn,xn] = np.shape(M)
+    # initalize arrays for patch values 
+    xgrid = np.empty((4,(xn*yn)))
+    xgrid[:] = np.nan
+    ygrid = np.empty((4,(xn*yn)))
+    ygrid[:] = np.nan
+    cgrid = np.empty((1,xn*yn))
+    cgrid[:] = np.nan
+    # iterate through all x/y combos of the stimulation grid 
+
+    tmp = []
+    for x in range(xn):
+        for y in range(yn):
+            idx = (x) * yn + y #index for storing in x/y grids (note differnce in indexing)
+            tmp = np.append(tmp,idx)
+            xgrid[:,idx] = np.squeeze(np.array([(np.array([-1,1,1,-1]) * mapSpacing/2) + ((x+1)*mapSpacing)]).T) #Coords for 4 corners of the patch
+            ygrid[:,idx] = np.squeeze(np.array([(np.array([-1,-1,1,1]) * mapSpacing/2) + ((y+1)*mapSpacing)]).T) #Cords for 4 corners of the patch
+            cgrid[:,idx] = M[y,x] #test to make sure this indexing is correct! 
+
+
+    #translate grid according to metadata. NOTE inversion of y-axis! 
+    xgrid1 = xgrid - (xn*mapSpacing/2) - mapSpacing/2
+    ygrid1 = -(ygrid -(yn*mapSpacing/2)-mapSpacing/2)
+    # make sure all values at or above zero are transparent (replace zeros with Nan)
+    cgrid[cgrid == 0] = np.nan
+    # rotate grid according to metadata (note, this data in only contained in the workspace variable!)
+    tform = np.array([[np.cos(np.deg2rad(spatialRotation)),np.sin(np.deg2rad(spatialRotation)),0],[-np.sin(np.deg2rad(spatialRotation)),np.cos(np.deg2rad(spatialRotation)),0],[xPatternOffset,yPatternOffset,1]])
+    ygrid_vector=ygrid1[:].T.reshape(-1,1)
+    xgrid_vector = xgrid1[:].T.reshape(-1,1)
+    #transform coordinates 
+    [xt,yt]=forwardAffineTransform(tform,xgrid_vector,ygrid_vector)
+    #reshape 
+    xgrid2 = xt.reshape(4,((xn*yn)),order='F')
+    ygrid2 = yt.reshape(4,((xn*yn)),order='F')
+    #color valus: 
+    Z = np.vstack((cgrid,cgrid,cgrid,cgrid))
+
+
+    # plot the grid using pcolormesh.
+    #note: pcolormesh update #16258 depreciates shading = 'flat' when data and coords have the same shape 
+    # and introduces shading ='nearest' which interpolates the coordinates. However, the logic for 
+    # the interpolation breaks down if they are not monotonically incerasing, which is the case here. 
+    # to fix, drop the last column of Z and use shading='flat'
+    cm =ax.pcolormesh(xgrid2,ygrid2,Z[:-1,:-1],cmap = 'magma_r', shading = 'flat')
+    cbaxes = inset_axes(ax,width = '3%',height = '50%', loc = 1)
+    color_bar = plt.colorbar(cm,cax=cbaxes)
+    color_bar.ax.yaxis.set_tick_params(color = 'white')
+    plt.setp(plt.getp(color_bar.ax.axes,'yticklabels'),color='white')
+    #fig.colorbar(cm,cax = cbaxes)
+    ax.set_aspect('equal')
+    #hgrid = 
+
+
+
+    ######################## Neurolucida Tracing ########################
+    plotSWC(axis = ax,
+            flip = flip,
+            spatial_rotation = spatialRotation,
+            input_rotation = input_rotation,
+            shrinkX = 1,
+            shrinkY=1,
+            tweekSomaX=0,
+            tweekSomaY=0,
+            soma1Coordinates=soma1Coordinates,
+            file_path=file_path)
+
+   
+

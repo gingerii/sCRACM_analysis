@@ -43,3 +43,13 @@ Collapse all maps of a group:
 Page through all maps of a group:
 ![My_Image](example_images/page.png)
 
+## Generate example images, such as map and traced cell overlay 
+To overlay a neuron tracing over the sCRACM map for that cell, run the overlaySWC command. 
+First, the neuron tracing will be plotted. Contirm that the tracing has the correct orientation (ie anterior to the left). During SWC processing, the x-axis can be flipped, so this step is important. Select the proper acute slice .tif image, and the neuron will be plotted over the input map. 
+
+Check tracing orientation: 
+![My_Image](example_images/SWC.png)
+
+Overlay: 
+![My_Image](example_images/overlay.png)
+
