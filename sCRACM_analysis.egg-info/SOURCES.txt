@@ -9,4 +9,5 @@ sCRACM_analysis.egg-info/dependency_links.txt
 sCRACM_analysis.egg-info/requires.txt
 sCRACM_analysis.egg-info/top_level.txt
 sCRACM_analysis/analysis/__init__.py
-sCRACM_analysis/analysis/analyzeSCRACM.py
+sCRACM_analysis/analysis/analyzeData.py
+sCRACM_analysis/analysis/cleanData.py

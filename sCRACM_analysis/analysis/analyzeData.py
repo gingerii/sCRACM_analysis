@@ -29,7 +29,8 @@ Execution/plotting functions:
     against negative controls per input source, per layer. Returns ttest stats for each layer
     - plotSWC: Will plot annotations and traced cell from an SWC file. 
     - overlaySWC: Overlays sCRACM map with SWC tracing and .tif actute slice image 
-
+    - averageIntegrationByLayer: Use to compare average integration in pairwise manner, with L2 comparing against all other layers. 
+    Input to function is the input source being investigated. Error bars indicate the SEM.
 Citations and such: 
 Much of the sCRACM map averaing has been adapted, with permission, from Petreanu et al., 2009: https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2745650/  (original code writen in Matlab)
 
@@ -1096,4 +1097,59 @@ def overlaySWC(CellID,
             file_path=file_path)
 
    
+def averageIntegrationByLayer(input_source):
+    """"
+    Use to compare average integration in pairwise manner, with L2 comparing against all other layers. 
+    Input to function is the input source being investigated. Error bars indicate the SEM. 
+    """
+    #load df
+    df = load_sCRACMdatabase()
+    #annotate layers based on soma depth
+    annotate_layers(df)
+    #filter for cells passing QC only 
+    df = df[(df['MapForAnalysis']==True)& (df['InjectionSite']==input_source)]
+    ids = analysis_path + df['CellID'] + '_analysis.m'
+    #load in the total integration using interpreter 
+    df['total_integration'] = [np.sum(m2p.mstruct2pydict(n)['mean']) for n in ids]
+    #Drop claustrum cells from the analysis: 
+    df = df[df.layer_bin != 'claustrum']
 
+    #initialize arrays 
+    total_means = []
+    layers = ['L2','L3','L5','L6']
+    # iterate over the animal IDs in the df
+    for animal in df.AnimalID.unique():
+        #initialize means during every iteration 
+        means = []
+        for layer in layers:
+        #find mean integration of each layer present that recording day 
+            mean=df[(df['AnimalID'] == animal)&(df['layer_bin']==layer)]['total_integration'].mean()
+            means.append(mean)
+        total_means.append(means)
+    #convert to np array for easier use
+    total_means=np.array([np.array(xi) for xi in total_means])
+    #get the means for all cells, ignore NaN values 
+    means_for_plot = np.nanmean(total_means,axis=0)*-1
+
+    #to calc SEM, quick and dirty, no loop
+    L2_SEM = np.nanstd(total_means[:,0])/np.sqrt(np.size(total_means[:,0]))
+    L3_SEM = np.nanstd(total_means[:,1])/np.sqrt(np.size(total_means[:,1]))
+    L5_SEM = np.nanstd(total_means[:,2])/np.sqrt(np.size(total_means[:,2]))
+    L6_SEM = np.nanstd(total_means[:,3])/np.sqrt(np.size(total_means[:,3]))
+
+    #for plotting:
+    SEMs = [L3_SEM,L5_SEM,L6_SEM]
+    layers_plot = ['L3','L5','L6']
+    fig,axs = plt.subplots(nrows =1,ncols =3,figsize=(15,5))
+    fig.suptitle(f' {input_source} total integration by layer',fontsize = 18)
+    #loop through data and axes 
+    for data,ax,SEM,layer in zip(means_for_plot[1:],axs.ravel(),SEMs,layers_plot):
+        #index into the averages here, 
+        ax.scatter(means_for_plot[0],data,facecolors = 'none',edgecolors = 'r',s=150)
+        ax.errorbar(means_for_plot[0],data,xerr = L2_SEM,yerr=SEM,color = 'r')
+        ax.axline((0,0),(1,1),linestyle = '--',color = 'grey')
+        #set axis equal, 200 more that L2 average integration
+        ax.set_ylim([0,means_for_plot[0]+200])
+        ax.set_xlim([0,means_for_plot[0]+200])
+        ax.set_xlabel('Input to L2 (pA)');
+        ax.set_ylabel(f'Input to {layer} (pA)' );
